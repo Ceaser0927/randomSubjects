@@ -1,5 +1,5 @@
 {
-  "originHash" : "c63c63846d9c539229e96de38d6af51417e28c0ee9a0bc48bd0f0f19d923c329",
+  "originHash" : "3e798159b1654e3ec06044110a276816f8c4dc08baa6e52a89ba94ba43ab1b8f",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "9b3aed4fa6226125305b82d4d86c715bef250785",
         "version" : "12.9.0"
+      }
+    },
+    {
+      "identity" : "gaugekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/antonmartinsson/gaugekit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "0042cf87802d4bf5866cd5ff3493cec32676e27d"
       }
     },
     {

@@ -37,6 +37,13 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             TabView {
+                BurnoutScoreView(steps: steps)
+                    .tabItem {
+                        VStack {
+                            Image(systemName: "gauge.high")
+                            Text("Home")
+                        }
+                    }
                 ActivityView(steps: steps)
                     .tabItem {
                         VStack {
@@ -45,24 +52,38 @@ struct ContentView: View {
                             Text("Activity")
                         }
                     }
-                
-                Fitness_View()
+                TrendsView(steps: steps)
                     .tabItem {
                         VStack {
-                            Image(systemName: "figure.run.circle.fill")
-                            
-                            Text("Fitness+")
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                            Text("Trends")
+                        }
+                    }
+                SettingsView()
+                    .tabItem {
+                        VStack {
+                            Image(systemName: "gearshape")
+                            Text("Sttings")
                         }
                     }
                 
-                SharingView()
-                    .tabItem {
-                        VStack {
-                            Image(systemName: "s.circle.fill")
-                            
-                            Text("Sharing")
-                        }
-                    }
+//                Fitness_View()
+//                    .tabItem {
+//                        VStack {
+//                            Image(systemName: "figure.run.circle.fill")
+//                            
+//                            Text("Fitness+")
+//                        }
+//                    }
+//                
+//                SharingView()
+//                    .tabItem {
+//                        VStack {
+//                            Image(systemName: "s.circle.fill")
+//                            
+//                            Text("Sharing")
+//                        }
+//                    }
             }
         }
         .onAppear {

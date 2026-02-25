@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0D1D4A6B2F4EB3B9001EF527 /* BurnoutScoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */; };
+		0D1D4A6E2F4EBB8D001EF527 /* GaugeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0D1D4A6D2F4EBB8D001EF527 /* GaugeKit */; };
+		0D1D4A702F4EC5FF001EF527 /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */; };
+		0D1D4A722F4ECB4C001EF527 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */; };
 		0D73D9F62F459B1A00D69775 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0D73D9F52F459B1A00D69775 /* GoogleService-Info.plist */; };
 		0DC5DC592F3C5FA500A86516 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 0DC5DC582F3C5FA500A86516 /* FirebaseAuth */; };
 		0DC5DC5B2F3C5FAD00A86516 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0DC5DC5A2F3C5FAD00A86516 /* FirebaseCore */; };
@@ -58,6 +62,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BurnoutScoreView.swift; sourceTree = "<group>"; };
+		0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
+		0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0D73D9F52F459B1A00D69775 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		0DC5DC5C2F3C606100A86516 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0DC5DC5E2F3C60F800A86516 /* MainPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPageView.swift; sourceTree = "<group>"; };
@@ -107,6 +114,7 @@
 			files = (
 				0DC5DC5B2F3C5FAD00A86516 /* FirebaseCore in Frameworks */,
 				0DC5DC592F3C5FA500A86516 /* FirebaseAuth in Frameworks */,
+				0D1D4A6E2F4EBB8D001EF527 /* GaugeKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,7 +225,10 @@
 		1AC61F672A59229100466E1E /* Activity */ = {
 			isa = PBXGroup;
 			children = (
+				0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */,
 				1AABE6132A56622900F4572D /* ActivityView.swift */,
+				0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */,
+				0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */,
 				1AABE6092A55811600F4572D /* ActivityRectangle.swift */,
 				1AABE6152A56678800F4572D /* DetailActivityView.swift */,
 				1AABE6192A56DA3F00F4572D /* ActivityRing.swift */,
@@ -299,6 +310,7 @@
 			packageProductDependencies = (
 				0DC5DC582F3C5FA500A86516 /* FirebaseAuth */,
 				0DC5DC5A2F3C5FAD00A86516 /* FirebaseCore */,
+				0D1D4A6D2F4EBB8D001EF527 /* GaugeKit */,
 			);
 			productName = iSteps;
 			productReference = 1AFFA7F72A5439A700120F81 /* iSteps.app */;
@@ -330,6 +342,7 @@
 			mainGroup = 1AFFA7EE2A5439A700120F81;
 			packageReferences = (
 				0DC5DC572F3C5F2900A86516 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				0D1D4A6C2F4EBB8D001EF527 /* XCRemoteSwiftPackageReference "gaugekit" */,
 			);
 			productRefGroup = 1AFFA7F82A5439A700120F81 /* Products */;
 			projectDirPath = "";
@@ -371,16 +384,19 @@
 				1AFFA80D2A54461C00120F81 /* Date+Extension.swift in Sources */,
 				1AC61F6B2A593EEC00466E1E /* Fitness+View.swift in Sources */,
 				1AFFA80B2A5445CA00120F81 /* HealthStore.swift in Sources */,
+				0D1D4A722F4ECB4C001EF527 /* SettingsView.swift in Sources */,
 				0DC5DC6D2F3C623400A86516 /* TextFieldView.swift in Sources */,
 				0DC5DC6E2F3C623400A86516 /* ResetPasswordView.swift in Sources */,
 				0DC5DC6F2F3C623400A86516 /* RegistrationInputPage.swift in Sources */,
 				0DC5DC702F3C623400A86516 /* LoginView.swift in Sources */,
 				0DC5DC712F3C623400A86516 /* ResetSuccessful.swift in Sources */,
 				0DC5DC722F3C623400A86516 /* RegistrationPageView.swift in Sources */,
+				0D1D4A702F4EC5FF001EF527 /* TrendsView.swift in Sources */,
 				0DC5DC732F3C623400A86516 /* LoginFooterView.swift in Sources */,
 				0DC5DC742F3C623400A86516 /* ResetView.swift in Sources */,
 				0DC5DC752F3C623400A86516 /* LoginButton.swift in Sources */,
 				0DC5DC872F3C639700A86516 /* UIResponder.swift in Sources */,
+				0D1D4A6B2F4EB3B9001EF527 /* BurnoutScoreView.swift in Sources */,
 				0DC5DC882F3C639700A86516 /* KeyboardHeightPublisher.swift in Sources */,
 				0DC5DC892F3C639700A86516 /* KeyboardAdaptive.swift in Sources */,
 				1AABE61F2A56F51B00F4572D /* Double+Extension.swift in Sources */,
@@ -529,7 +545,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"iSteps/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = P272GMJ6NH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iSteps/Info.plist;
@@ -546,7 +562,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.qwoti.iSteps;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ahmatkavsar.iSteps1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -567,7 +583,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"iSteps/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = P272GMJ6NH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iSteps/Info.plist;
@@ -584,7 +600,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.qwoti.iSteps;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ahmatkavsar.iSteps1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -619,6 +635,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0D1D4A6C2F4EBB8D001EF527 /* XCRemoteSwiftPackageReference "gaugekit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/antonmartinsson/gaugekit.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		0DC5DC572F3C5F2900A86516 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -630,6 +654,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0D1D4A6D2F4EBB8D001EF527 /* GaugeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0D1D4A6C2F4EBB8D001EF527 /* XCRemoteSwiftPackageReference "gaugekit" */;
+			productName = GaugeKit;
+		};
 		0DC5DC582F3C5FA500A86516 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0DC5DC572F3C5F2900A86516 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
