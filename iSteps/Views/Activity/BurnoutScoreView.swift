@@ -1,6 +1,7 @@
 import SwiftUI
 import GaugeKit
 import SafariServices
+import FirebaseAuth
 
 struct BurnoutScoreView: View {
 
@@ -8,6 +9,8 @@ struct BurnoutScoreView: View {
 
     // ✅ Survey moved to Home (top-right doc button)
     @State private var isSurveyPresented = false
+    
+    @AppStorage("is_full_session_unlocked") private var isFullSessionUnlocked: Bool = true
 
     // MARK: - Simple rule algorithm (replace later with ML model)
     // When no data, return nil (so UI can show No Data state)
@@ -186,7 +189,9 @@ struct BurnoutScoreView: View {
             .navigationBarTitleDisplayMode(.inline)
             // ✅ Survey button (moved here)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+
+                    // Survey button
                     Button {
                         isSurveyPresented = true
                     } label: {
@@ -195,6 +200,15 @@ struct BurnoutScoreView: View {
                     .sheet(isPresented: $isSurveyPresented) {
                         SafariView(url: URL(string: "https://form.typeform.com/to/STFEkNs0")!)
                     }
+
+                    // Temporary: back to Pilot (no Firebase logout)
+                    Button {
+                        isFullSessionUnlocked = false
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .foregroundColor(.red) // Temporary: will be removed later
+                    }
+                    .accessibilityLabel("Back to Pilot")
                 }
             }
         }
