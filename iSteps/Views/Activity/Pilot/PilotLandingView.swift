@@ -1,17 +1,19 @@
+// PilotLandingView.swift
 import SwiftUI
 import HealthKit
 import FirebaseFirestore
 import FirebaseAuth
+import SafariServices
 
 struct PilotLandingView: View {
 
     let onUnlock: () -> Void
     let studyTotalDays: Int = 14
 
-    // ✅ 用项目现有的登录控制器驱动 UI 切换
+    // Uses the app's existing auth controller to drive UI switching.
     @EnvironmentObject var authController: EmailAuthenticationController
 
-    // ✅ 统一用 AppStorage 让 SwiftUI 能即时刷新
+    // Use AppStorage so SwiftUI refreshes immediately when values change.
     @AppStorage("app_mode") private var appModeRaw: String = AppMode.pilot.rawValue
 
     @AppStorage("participant_id") var participantId: String = ""
@@ -20,21 +22,28 @@ struct PilotLandingView: View {
     @AppStorage("last_sync_epoch") var lastSyncEpoch: Double = 0
     @AppStorage("last_upload_epoch") var lastUploadEpoch: Double = 0
     @AppStorage("upload_state") var uploadStateRaw: String = PilotUploadState.ok.rawValue
-    //@AppStorage("did_backfill_history") var didBackfillHistory: Bool = false
-    
+    // @AppStorage("did_backfill_history") var didBackfillHistory: Bool = false
+
     @State var showAdminSheet = false
     @State var adminPassword = ""
     @State var showWrongPasswordAlert = false
 
+    // Presents the external survey using Safari (same as BurnoutScoreView).
     @State var isSurveyPresented = false
 
     let hk = HKHealthStore()
+
+    // IMPORTANT:
+    // These must NOT be `private` because PilotSupport.swift accesses them from another file.
     @State var healthAuthorized: Bool = false
     @State var watchLikelyConnected: Bool = false
     @State var todaySignals: PilotTodaySignals = .loading
 
     @State var nextSurveyText: String = "Not scheduled"
     @State var surveyOverdue: Bool = false
+
+    // Update this URL if you switch survey providers.
+    private let surveyURLString: String = "https://form.typeform.com/to/STFEkNs0"
 
     var body: some View {
         NavigationView {
@@ -62,11 +71,33 @@ struct PilotLandingView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
 
-                    // Survey
+                    // Survey (same behavior as BurnoutScoreView)
                     Button {
                         isSurveyPresented = true
                     } label: {
                         Image(systemName: "doc.text")
+                    }
+                    .accessibilityLabel("Survey")
+                    .sheet(isPresented: $isSurveyPresented) {
+                        if let url = URL(string: surveyURLString) {
+                            SafariView(url: url)
+                        } else {
+                            NavigationView {
+                                VStack(spacing: 12) {
+                                    Text("Invalid survey link.")
+                                        .font(.headline)
+                                    Text(surveyURLString)
+                                        .font(.footnote)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 16)
+                                    Button("Close") { isSurveyPresented = false }
+                                }
+                                .padding()
+                                .navigationTitle("Survey")
+                                .navigationBarTitleDisplayMode(.inline)
+                            }
+                        }
                     }
 
                     // Admin unlock
@@ -74,24 +105,25 @@ struct PilotLandingView: View {
                         showAdminSheet = true
                     } label: {
                         Image(systemName: "lock.circle")
-                            .foregroundColor(.red) // Marked red: temporary access button
+                            .foregroundColor(.red) // Temporary: mark admin access button in red
                     }
+                    .accessibilityLabel("Admin Unlock")
 
+                    // Logout
                     Button {
-                        // Dismiss any presented UI before logging out
+                        // Dismiss any presented UI before logging out.
                         isSurveyPresented = false
                         showAdminSheet = false
                         adminPassword = ""
-                        
-                        // Reset app mode back to pilot before logout
+
+                        // Reset app mode back to pilot before logout.
                         appModeRaw = AppMode.pilot.rawValue
-                        
-                        // Trigger logout through authentication controller
+
+                        // Trigger logout through authentication controller.
                         authController.logout()
-                        
                     } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .foregroundColor(.red) // Marked red: will be removed later
+                            .foregroundColor(.red) // Temporary: will be removed later
                     }
                     .accessibilityLabel("Logout")
                 }
@@ -106,7 +138,7 @@ struct PilotLandingView: View {
                     onUnlock: {
                         adminPassword = ""
                         showAdminSheet = false
-                        onUnlock() // Directly unlock without password (Pilot phase)
+                        onUnlock() // Pilot phase: direct unlock without password check
                     }
                 )
                 .presentationDetents([.medium])
@@ -117,7 +149,7 @@ struct PilotLandingView: View {
                 Text("Admin access denied.")
             }
             .onAppear {
-                //didBackfillHistory = false
+                // didBackfillHistory = false
                 bootstrapStudyIfNeeded()
                 upsertParticipantProfile()
                 refreshAllStatuses()
@@ -305,7 +337,7 @@ extension PilotLandingView {
                     } else {
                         Text("Great—signals look good today.")
                             .font(.system(.footnote, design: .rounded))
-                        .foregroundColor(Color.white.opacity(0.65))
+                            .foregroundColor(Color.white.opacity(0.65))
                     }
                 }
             }

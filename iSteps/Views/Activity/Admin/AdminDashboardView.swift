@@ -57,18 +57,26 @@ struct DailyRow: Identifiable {
     }
 }
 
-enum AdminRangeDays: Int, CaseIterable {
-    case d7 = 7
-    case d14 = 14
-    case d30 = 30
-    case d90 = 90
+// MARK: - Metric selection
 
-    var title: String {
+enum AdminMetric: String, CaseIterable, Identifiable {
+    case steps = "Steps"
+    case sleep = "Sleep"
+    case hrv = "HRV SDNN"
+    case rhr = "Resting HR"
+    case energy = "Active Energy"
+    case all = "All (Normalized)"
+
+    var id: String { rawValue }
+
+    var systemImage: String {
         switch self {
-        case .d7: return "Last 7 days"
-        case .d14: return "Last 14 days"
-        case .d30: return "Last 30 days"
-        case .d90: return "Last 90 days"
+        case .steps: return "figure.walk"
+        case .sleep: return "bed.double"
+        case .hrv: return "waveform.path.ecg"
+        case .rhr: return "heart"
+        case .energy: return "flame"
+        case .all: return "chart.xyaxis.line"
         }
     }
 }
@@ -79,7 +87,7 @@ struct AdminDashboardView: View {
 
     @EnvironmentObject private var session: EmailAuthenticationController
 
-    // same look & feel as pilot
+    // Same look & feel as pilot
     private var pilotBackground: some View {
         LinearGradient(
             colors: [
@@ -95,12 +103,17 @@ struct AdminDashboardView: View {
     @State private var participants: [ParticipantItem] = []
     @State private var selectedUID: String? = nil
 
-    @State private var range: AdminRangeDays = .d14
+    // Use plain Int to avoid Picker tag mismatch issues.
+    @State private var rangeDays: Int = 14
+
     @State private var dailyRows: [DailyRow] = []
     @State private var isLoading: Bool = false
     @State private var errorText: String? = nil
 
-    // export
+    // Trend controls
+    @State private var selectedMetric: AdminMetric = .steps
+
+    // Export
     @State private var exportURL: URL? = nil
     @State private var showShare: Bool = false
 
@@ -113,7 +126,6 @@ struct AdminDashboardView: View {
                     VStack(spacing: 14) {
 
                         headerCard
-
                         selectorCard
 
                         if isLoading {
@@ -140,7 +152,6 @@ struct AdminDashboardView: View {
                         }
 
                         trendsCard
-
                         exportCard
 
                         Spacer(minLength: 20)
@@ -168,13 +179,9 @@ struct AdminDashboardView: View {
                     .accessibilityLabel("Logout")
                 }
             }
-            .onAppear {
-                reloadAll()
-            }
+            .onAppear { reloadAll() }
             .sheet(isPresented: $showShare) {
-                if let exportURL {
-                    ShareSheet(activityItems: [exportURL])
-                }
+                if let exportURL { ShareSheet(activityItems: [exportURL]) }
             }
         }
     }
@@ -234,13 +241,14 @@ struct AdminDashboardView: View {
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
     }
+
     private var selectedParticipantDisplay: String {
-        if let uid = selectedUID,
-           let p = participants.first(where: { $0.id == uid }) {
+        if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }) {
             return p.display
         }
         return participants.first?.display ?? "Select"
     }
+
     private var selectorCard: some View {
         glassCard(title: "Participant Selector", trailingIcon: "person.3") {
             VStack(spacing: 12) {
@@ -270,7 +278,6 @@ struct AdminDashboardView: View {
                             HStack(spacing: 6) {
                                 Text(selectedParticipantDisplay)
                                     .foregroundColor(.accentColor)
-
                                 Image(systemName: "chevron.up.chevron.down")
                                     .foregroundColor(.accentColor)
                             }
@@ -283,15 +290,33 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Picker("", selection: $range) {
-                        ForEach(AdminRangeDays.allCases, id: \.self) { r in
-                            Text(r.title).tag(r)
-                        }
+
+                    Picker("", selection: $rangeDays) {
+                        Text("Last 7 days").tag(7)
+                        Text("Last 14 days").tag(14)
+                        Text("Last 30 days").tag(30)
+                        Text("Last 90 days").tag(90)
                     }
                     .pickerStyle(.menu)
-                    .onChange(of: range) { _ in
+                    .onChange(of: rangeDays) { _ in
                         reloadDaily()
                     }
+                }
+
+                // Showing loaded count helps clarify why the UI may look unchanged if the user has
+                // fewer docs than the selected range.
+                HStack {
+                    Text("Loaded")
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text("\(dailyRows.count) / \(rangeDays) days")
+                        .font(.system(.caption, design: .rounded).weight(.bold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.white.opacity(0.08))
+                        .clipShape(Capsule())
                 }
 
                 HStack(spacing: 12) {
@@ -309,8 +334,7 @@ struct AdminDashboardView: View {
 
                     Spacer()
 
-                    if let uid = selectedUID,
-                       let p = participants.first(where: { $0.id == uid }) {
+                    if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }) {
                         Text(p.display)
                             .font(.system(.caption, design: .rounded).weight(.bold))
                             .foregroundColor(.white.opacity(0.85))
@@ -331,7 +355,6 @@ struct AdminDashboardView: View {
         glassCard(title: "Latest Summary", trailingIcon: "doc.plaintext") {
             VStack(spacing: 10) {
                 statusRow(title: "Date", value: latest.dateId, valueColor: .white.opacity(0.9), icon: "calendar")
-
                 statusRow(title: "Steps", value: latest.steps.map(String.init) ?? "—", valueColor: .white.opacity(0.9), icon: "figure.walk")
                 statusRow(title: "Sleep (h)", value: latest.sleepHours.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "bed.double")
                 statusRow(title: "HRV SDNN (ms)", value: latest.hrvSDNNms.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "waveform.path.ecg")
@@ -363,67 +386,161 @@ struct AdminDashboardView: View {
         }
     }
 
+    // MARK: - Trends (single chart + dropdown)
+
     private var trendsCard: some View {
         glassCard(title: "Trends", trailingIcon: "chart.xyaxis.line") {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+
                 if dailyRows.isEmpty {
                     Text("No daily data yet for selected participant.")
                         .font(.system(.footnote, design: .rounded))
                         .foregroundColor(.white.opacity(0.65))
                 } else {
-                    metricChart(
-                        title: "Steps",
-                        systemImage: "figure.walk",
-                        points: dailyRows.compactMap { row in
-                            guard let v = row.steps else { return nil }
-                            return ChartPoint(dateId: row.dateId, value: Double(v))
-                        },
-                        valueFormat: { "\(Int($0))" }
-                    )
 
-                    metricChart(
-                        title: "Sleep Hours",
-                        systemImage: "bed.double",
-                        points: dailyRows.compactMap { row in
-                            guard let v = row.sleepHours else { return nil }
-                            return ChartPoint(dateId: row.dateId, value: v)
-                        },
-                        valueFormat: { String(format: "%.2f", $0) }
-                    )
+                    HStack {
+                        Image(systemName: selectedMetric.systemImage)
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Metric")
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundColor(.white)
+                        Spacer()
 
-                    metricChart(
-                        title: "HRV SDNN (ms)",
-                        systemImage: "waveform.path.ecg",
-                        points: dailyRows.compactMap { row in
-                            guard let v = row.hrvSDNNms else { return nil }
-                            return ChartPoint(dateId: row.dateId, value: v)
-                        },
-                        valueFormat: { String(format: "%.2f", $0) }
-                    )
+                        Picker("", selection: $selectedMetric) {
+                            ForEach(AdminMetric.allCases) { m in
+                                Text(m.rawValue).tag(m)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
 
-                    metricChart(
-                        title: "Resting HR (bpm)",
-                        systemImage: "heart",
-                        points: dailyRows.compactMap { row in
-                            guard let v = row.restingHRbpm else { return nil }
-                            return ChartPoint(dateId: row.dateId, value: v)
-                        },
-                        valueFormat: { String(format: "%.0f", $0) }
-                    )
+                    trendsChartView()
+                        .frame(height: 220)
+                        .padding(10)
+                        .background(.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(.white.opacity(0.08), lineWidth: 1)
+                        )
 
-                    metricChart(
-                        title: "Active Energy (kcal)",
-                        systemImage: "flame",
-                        points: dailyRows.compactMap { row in
-                            guard let v = row.activeEnergyKcal else { return nil }
-                            return ChartPoint(dateId: row.dateId, value: v)
-                        },
-                        valueFormat: { String(format: "%.1f", $0) }
-                    )
+                    if selectedMetric == .all {
+                        Text("All series are normalized to 0–1 for comparability (different units are not directly comparable).")
+                            .font(.system(.footnote, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                 }
             }
         }
     }
+
+    struct ChartPoint: Identifiable {
+        let id = UUID()
+        let dateId: String
+        let value: Double
+        let series: String
+
+        var date: Date { AdminDashboardView.parseDateId(dateId) ?? Date() }
+    }
+
+    private func trendsChartView() -> some View {
+        let points = buildTrendPoints(metric: selectedMetric, rows: dailyRows)
+
+        return Chart(points.sorted(by: { $0.date < $1.date })) { p in
+            LineMark(
+                x: .value("Date", p.date),
+                y: .value("Value", p.value)
+            )
+            .foregroundStyle(by: .value("Series", p.series))
+
+            PointMark(
+                x: .value("Date", p.date),
+                y: .value("Value", p.value)
+            )
+            .foregroundStyle(by: .value("Series", p.series))
+        }
+        .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
+        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
+        .chartLegend(.visible)
+    }
+
+    private func buildTrendPoints(metric: AdminMetric, rows: [DailyRow]) -> [ChartPoint] {
+        let sorted = rows.sorted(by: { $0.dateId < $1.dateId })
+
+        switch metric {
+        case .steps:
+            return sorted.compactMap { r in
+                guard let v = r.steps else { return nil }
+                return ChartPoint(dateId: r.dateId, value: Double(v), series: "Steps")
+            }
+
+        case .sleep:
+            return sorted.compactMap { r in
+                guard let v = r.sleepHours else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "Sleep Hours")
+            }
+
+        case .hrv:
+            return sorted.compactMap { r in
+                guard let v = r.hrvSDNNms else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "HRV SDNN")
+            }
+
+        case .rhr:
+            return sorted.compactMap { r in
+                guard let v = r.restingHRbpm else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "Resting HR")
+            }
+
+        case .energy:
+            return sorted.compactMap { r in
+                guard let v = r.activeEnergyKcal else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "Active Energy")
+            }
+
+        case .all:
+            // Normalize each metric independently to 0–1 (min-max).
+            func normalize(_ series: [(String, Double)]) -> [(String, Double)] {
+                guard let minV = series.map(\.1).min(),
+                      let maxV = series.map(\.1).max() else { return [] }
+                guard maxV > minV else {
+                    return series.map { ($0.0, 0.0) }
+                }
+                return series.map { ($0.0, ($0.1 - minV) / (maxV - minV)) }
+            }
+
+            let stepsRaw: [(String, Double)] = sorted.compactMap { r in
+                guard let v = r.steps else { return nil }
+                return (r.dateId, Double(v))
+            }
+            let sleepRaw: [(String, Double)] = sorted.compactMap { r in
+                guard let v = r.sleepHours else { return nil }
+                return (r.dateId, v)
+            }
+            let hrvRaw: [(String, Double)] = sorted.compactMap { r in
+                guard let v = r.hrvSDNNms else { return nil }
+                return (r.dateId, v)
+            }
+            let rhrRaw: [(String, Double)] = sorted.compactMap { r in
+                guard let v = r.restingHRbpm else { return nil }
+                return (r.dateId, v)
+            }
+            let energyRaw: [(String, Double)] = sorted.compactMap { r in
+                guard let v = r.activeEnergyKcal else { return nil }
+                return (r.dateId, v)
+            }
+
+            let steps = normalize(stepsRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Steps") }
+            let sleep = normalize(sleepRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Sleep") }
+            let hrv = normalize(hrvRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "HRV") }
+            let rhr = normalize(rhrRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "RHR") }
+            let energy = normalize(energyRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Energy") }
+
+            return steps + sleep + hrv + rhr + energy
+        }
+    }
+
+    // MARK: - Export CSV
 
     private var exportCard: some View {
         glassCard(title: "Export", trailingIcon: "square.and.arrow.up") {
@@ -469,66 +586,6 @@ struct AdminDashboardView: View {
                     .foregroundColor(.white)
                 }
             }
-        }
-    }
-
-    // MARK: - Chart helper
-
-    struct ChartPoint: Identifiable {
-        let id = UUID()
-        let dateId: String
-        let value: Double
-
-        var date: Date {
-            AdminDashboardView.parseDateId(dateId) ?? Date()
-        }
-    }
-
-    private func metricChart(title: String, systemImage: String, points: [ChartPoint], valueFormat: @escaping (Double) -> String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: systemImage)
-                    .foregroundColor(.white.opacity(0.85))
-                Text(title)
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    .foregroundColor(.white)
-                Spacer()
-
-                if let last = points.sorted(by: { $0.dateId > $1.dateId }).first {
-                    Text(valueFormat(last.value))
-                        .font(.system(.caption, design: .rounded).weight(.bold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.white.opacity(0.08))
-                        .clipShape(Capsule())
-                }
-            }
-
-            Chart(points.sorted(by: { $0.date < $1.date })) { p in
-                LineMark(
-                    x: .value("Date", p.date),
-                    y: .value("Value", p.value)
-                )
-                PointMark(
-                    x: .value("Date", p.date),
-                    y: .value("Value", p.value)
-                )
-            }
-            .frame(height: 160)
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4))
-            }
-            .chartYAxis {
-                AxisMarks(values: .automatic(desiredCount: 4))
-            }
-            .padding(10)
-            .background(.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(.white.opacity(0.08), lineWidth: 1)
-            )
         }
     }
 
@@ -602,7 +659,7 @@ struct AdminDashboardView: View {
             .document(uid)
             .collection("daily")
             .order(by: "date", descending: true)
-            .limit(to: range.rawValue)
+            .limit(to: rangeDays)
             .getDocuments { snap, err in
                 isLoading = false
                 if let err {
@@ -616,13 +673,10 @@ struct AdminDashboardView: View {
             }
     }
 
-    // MARK: - Export CSV (Excel-friendly)
-
     private func exportCSV() {
         guard let uid = selectedUID else { return }
         let display = participants.first(where: { $0.id == uid })?.display ?? uid
 
-        // Sort ascending by date
         let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
 
         var csv = "date,steps,sleepHours,hrvSDNN_ms,restingHR_bpm,activeEnergyKcal,validDay,syncedAt\n"
@@ -644,7 +698,7 @@ struct AdminDashboardView: View {
             .replacingOccurrences(of: ".", with: "_")
             .replacingOccurrences(of: " ", with: "_")
 
-        let fileName = "pilot_export_\(safeName)_\(range.rawValue)d.csv"
+        let fileName = "pilot_export_\(safeName)_\(rangeDays)d.csv"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
         do {

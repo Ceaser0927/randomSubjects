@@ -11,18 +11,35 @@ import SwiftUI
 struct LoginFooterView: View {
     
     fileprivate func createButton(title: String, imageName: String) -> some View {
+        let isApple = (imageName.lowercased() == "apple")
+
         return Button(action: {}) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(Color.gray, lineWidth: 1)
-                HStack {
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 22, height: 22, alignment: .center)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.20), lineWidth: 1)
+
+                HStack(spacing: 10) {
+                    Group {
+                        if isApple {
+                            Image(imageName)
+                                .renderingMode(.template)   // ✅ 必须在 resizable 之前
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 22, height: 22)
+                                .foregroundColor(.white.opacity(0.9)) // ✅ 只在 Apple 分支加
+                        } else {
+                            Image(imageName)
+                                .renderingMode(.original)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 22, height: 22)
+                        }
+                    }
+
                     Text(title)
                         .font(.caption)
                         .bold()
+                        .foregroundColor(.white.opacity(0.85))
                 }
             }
         }
@@ -32,14 +49,16 @@ struct LoginFooterView: View {
         VStack {
             HStack {
                 Rectangle()
-                    .fill(Color.gray)
-                    .frame(height: 0.5)
+                    .fill(Color.white.opacity(0.28))
+                    .frame(height: 1)
+
                 Text("OR")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.55))
+
                 Rectangle()
-                    .fill(Color.gray)
-                    .frame(height: 0.5)
+                    .fill(Color.white.opacity(0.28))
+                    .frame(height: 1)
             }
                 .padding(.vertical, 5)
             HStack {

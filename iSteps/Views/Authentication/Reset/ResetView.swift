@@ -1,33 +1,37 @@
-//
-//  ResetView.swift
-//  SwiftUI-LoginView
-//
-//  Created by Максим on 30.04.2020.
-//  Copyright © 2020 Максим. All rights reserved.
-//
-
 import SwiftUI
 
 struct ResetView: View {
     @Binding var presentedBinding: Bool
-    
     @State private var showingPage = false
-    
+
     var body: some View {
         ZStack {
+            SpaceMeteorFieldView()
+                .ignoresSafeArea()
+                .overlay(
+                    RadialGradient(
+                        colors: [Color.clear, Color.black.opacity(0.55)],
+                        center: .center,
+                        startRadius: 120,
+                        endRadius: 520
+                    )
+                    .ignoresSafeArea()
+                )
+
             VStack {
-                if showingPage == true {
+                if showingPage {
                     Successful(presentedBinding: $presentedBinding)
-                        .animation(.spring())
-                        .transition(.move(edge: .trailing))
-                }
-                else {
-                    ResetPasswordView(presentedBinding: $presentedBinding, presentSuccessfulMessage: {
-                            withAnimation {
-                                self.showingPage = true
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    ResetPasswordView(
+                        presentedBinding: $presentedBinding,
+                        presentSuccessfulMessage: {
+                            withAnimation(.spring()) {
+                                showingPage = true
                             }
-                        })
-                        .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
+                        }
+                    )
+                    .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
         }
