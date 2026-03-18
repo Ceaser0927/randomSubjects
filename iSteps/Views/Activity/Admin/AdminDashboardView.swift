@@ -3,6 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import Charts
 import UniformTypeIdentifiers
+import libxlsxwriter
 
 // MARK: - Models
 
@@ -549,12 +550,39 @@ struct AdminDashboardView: View {
                     .font(.system(.footnote, design: .rounded))
                     .foregroundColor(.white.opacity(0.65))
 
-                Button {
-                    exportCSV()
+//                Button {
+//                    exportCSV()
+//                } label: {
+//                    HStack {
+//                        Image(systemName: "doc.badge.plus")
+//                        Text("Download CSV")
+//                    }
+//                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+//                    .padding(.horizontal, 14)
+//                    .padding(.vertical, 8)
+//                    .background(Color.white.opacity(0.08))
+//                    .clipShape(Capsule())
+//                }
+                Menu {
+                    Button {
+                        exportJSONFull()
+                    } label: {
+                        Label("Download JSON", systemImage: "curlybraces")
+                    }
+
+                    Button {
+                        exportXLSX()
+                    } label: {
+                        Label("Download Excel (.xlsx)", systemImage: "tablecells")
+                    }
+
+                    // 可选：保留 CSV 也行
+                    // Button { exportCSV() } label: { Label("Download CSV", systemImage: "doc.plaintext") }
+
                 } label: {
                     HStack {
-                        Image(systemName: "doc.badge.plus")
-                        Text("Download CSV")
+                        Image(systemName: "square.and.arrow.down")
+                        Text("Download")
                     }
                     .font(.system(.subheadline, design: .rounded).weight(.semibold))
                     .padding(.horizontal, 14)
@@ -562,6 +590,8 @@ struct AdminDashboardView: View {
                     .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
                 }
+                .foregroundColor(.white)
+                .disabled(dailyRows.isEmpty || selectedUID == nil)
                 .foregroundColor(.white)
                 .disabled(dailyRows.isEmpty || selectedUID == nil)
 
@@ -786,6 +816,224 @@ struct AdminDashboardView: View {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: d)
+    }
+    private func exportJSONFull() {
+        guard let uid = selectedUID else { return }
+        let display = participants.first(where: { $0.id == uid })?.display ?? uid
+
+        isLoading = true
+        errorText = nil
+
+        let db = Firestore.firestore()
+        let participantRef = db.collection("participants").document(uid)
+
+        participantRef.getDocument { pSnap, pErr in
+            if let pErr {
+                isLoading = false
+                errorText = "Load participant failed: \(pErr.localizedDescription)"
+                return
+            }
+
+            let participantData = pSnap?.data() ?? [:]
+
+            let group = DispatchGroup()
+
+            var dailyDocs: [[String: Any]] = []
+            var sleepDocs: [[String: Any]] = []
+
+            // ---- daily (不 limit，导出完整) ----
+            group.enter()
+            participantRef.collection("daily")
+                .order(by: "date", descending: false)
+                .getDocuments { snap, err in
+                    defer { group.leave() }
+                    if let err { errorText = "Load daily failed: \(err.localizedDescription)"; return }
+
+                    dailyDocs = (snap?.documents ?? []).map { d in
+                        var obj = d.data()
+                        obj["_id"] = d.documentID
+                        // Timestamp -> ISO8601（可选）
+                        obj = normalizeTimestamps(obj)
+                        return obj
+                    }
+                }
+
+            // ---- sleep_nightly (导出完整) ----
+            group.enter()
+            participantRef.collection("sleep_nightly")
+                .getDocuments { snap, err in
+                    defer { group.leave() }
+                    if let err {
+                        errorText = "Load sleep_nightly failed: \(err.localizedDescription)"
+                        return
+                    }
+
+                    sleepDocs = (snap?.documents ?? []).map { d in
+                        var obj = d.data()
+                        obj["_id"] = d.documentID
+                        obj = normalizeTimestamps(obj)
+                        return obj
+                    }
+                }
+
+            group.notify(queue: .main) {
+                isLoading = false
+                if let errorText, !errorText.isEmpty { return }
+
+                let payload: [String: Any] = [
+                    "uid": uid,
+                    "exportedAt": iso8601(Date()),
+                    "participant": normalizeTimestamps(participantData),
+                    "daily": dailyDocs,
+                    "sleep_nightly": sleepDocs
+                ]
+
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+
+                    let safeName = display
+                        .replacingOccurrences(of: "@", with: "_")
+                        .replacingOccurrences(of: ".", with: "_")
+                        .replacingOccurrences(of: " ", with: "_")
+
+                    let fileName = "pilot_export_full_\(safeName).json"
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+                    try data.write(to: url, options: .atomic)
+                    exportURL = url
+                    showShare = true
+                } catch {
+                    errorText = "Export JSON failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func normalizeTimestamps(_ dict: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (k, v) in dict {
+            if let ts = v as? Timestamp {
+                out[k] = iso8601(ts.dateValue())
+            } else if let sub = v as? [String: Any] {
+                out[k] = normalizeTimestamps(sub)
+            } else if let arr = v as? [Any] {
+                out[k] = arr.map { item -> Any in
+                    if let ts = item as? Timestamp { return iso8601(ts.dateValue()) }
+                    if let sub = item as? [String: Any] { return normalizeTimestamps(sub) }
+                    return item
+                }
+            } else {
+                out[k] = v
+            }
+        }
+        return out
+    }
+    private func exportXLSX() {
+        guard let uid = selectedUID else { return }
+        let display = participants.first(where: { $0.id == uid })?.display ?? uid
+        let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
+
+        // 文件名
+        let safeName = display
+            .replacingOccurrences(of: "@", with: "_")
+            .replacingOccurrences(of: ".", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+
+        let fileName = "pilot_export_\(safeName)_\(rangeDays)d.xlsx"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        // libxlsxwriter 需要 file path 字符串
+        let path = url.path
+
+        // 创建 workbook / worksheet
+        guard let workbook = workbook_new(path) else {
+            errorText = "Export Excel failed: workbook_new returned nil"
+            return
+        }
+        let worksheet = workbook_add_worksheet(workbook, "Daily")
+
+        // 一些格式（可选）
+        let headerFormat = workbook_add_format(workbook)
+        format_set_bold(headerFormat)
+
+        // Header
+        let headers = [
+            "date",
+            "steps",
+            "sleepHours",
+            "hrvSDNN_ms",
+            "restingHR_bpm",
+            "activeEnergyKcal",
+            "validDay",
+            "syncedAt"
+        ]
+
+        for (col, h) in headers.enumerated() {
+            worksheet_write_string(worksheet, 0, lxw_col_t(col), h, headerFormat)
+        }
+
+        // 内容
+        for (i, r) in rows.enumerated() {
+            let row = lxw_row_t(i + 1)
+
+            // date（字符串）
+            worksheet_write_string(worksheet, row, 0, r.dateId, nil)
+
+            // steps（数字）
+            if let v = r.steps {
+                worksheet_write_number(worksheet, row, 1, Double(v), nil)
+            }
+
+            // sleepHours
+            if let v = r.sleepHours {
+                worksheet_write_number(worksheet, row, 2, v, nil)
+            }
+
+            // hrvSDNN_ms
+            if let v = r.hrvSDNNms {
+                worksheet_write_number(worksheet, row, 3, v, nil)
+            }
+
+            // restingHR_bpm
+            if let v = r.restingHRbpm {
+                worksheet_write_number(worksheet, row, 4, v, nil)
+            }
+
+            // activeEnergyKcal
+            if let v = r.activeEnergyKcal {
+                worksheet_write_number(worksheet, row, 5, v, nil)
+            }
+
+            // validDay（写成 true/false 字符串更直观）
+            if let v = r.validDay {
+                worksheet_write_string(worksheet, row, 6, v ? "true" : "false", nil)
+            }
+
+            // syncedAt（ISO8601 字符串）
+            if let d = r.syncedAt {
+                worksheet_write_string(worksheet, row, 7, iso8601(d), nil)
+            }
+        }
+
+        // 可选：列宽好看一点
+        worksheet_set_column(worksheet, 0, 0, 12, nil) // date
+        worksheet_set_column(worksheet, 1, 1, 10, nil) // steps
+        worksheet_set_column(worksheet, 2, 2, 12, nil) // sleep
+        worksheet_set_column(worksheet, 3, 3, 12, nil) // hrv
+        worksheet_set_column(worksheet, 4, 4, 14, nil) // rhr
+        worksheet_set_column(worksheet, 5, 5, 16, nil) // energy
+        worksheet_set_column(worksheet, 6, 6, 10, nil) // validDay
+        worksheet_set_column(worksheet, 7, 7, 26, nil) // syncedAt
+
+        // 关闭并写入文件
+        let result = workbook_close(workbook)
+        if result != LXW_NO_ERROR {
+            errorText = "Export Excel failed: workbook_close error code \(result)"
+            return
+        }
+
+        exportURL = url
+        showShare = true
     }
 }
 

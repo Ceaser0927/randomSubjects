@@ -11,9 +11,9 @@
 		0D1D4A6E2F4EBB8D001EF527 /* GaugeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0D1D4A6D2F4EBB8D001EF527 /* GaugeKit */; };
 		0D1D4A702F4EC5FF001EF527 /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */; };
 		0D1D4A722F4ECB4C001EF527 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */; };
-		0D2BAF782F52BEF800C524B2 /* PilotLandingView1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2BAF772F52BEF800C524B2 /* PilotLandingView1.swift */; };
-		0D2BAF7A2F52CBA300C524B2 /* HealthStore11.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2BAF792F52CBA300C524B2 /* HealthStore11.swift */; };
 		0D73D9F62F459B1A00D69775 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0D73D9F52F459B1A00D69775 /* GoogleService-Info.plist */; };
+		0D781BBE2F6107A200835BA8 /* ProfileOnboardingModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D781BBD2F6107A200835BA8 /* ProfileOnboardingModule.swift */; };
+		0D781BC12F6126BD00835BA8 /* libxlsxwriter in Frameworks */ = {isa = PBXBuildFile; productRef = 0D781BC02F6126BD00835BA8 /* libxlsxwriter */; };
 		0DC5DC592F3C5FA500A86516 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 0DC5DC582F3C5FA500A86516 /* FirebaseAuth */; };
 		0DC5DC5B2F3C5FAD00A86516 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0DC5DC5A2F3C5FAD00A86516 /* FirebaseCore */; };
 		0DC5DC5D2F3C606100A86516 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC5DC5C2F3C606100A86516 /* RootView.swift */; };
@@ -68,9 +68,8 @@
 		0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BurnoutScoreView.swift; sourceTree = "<group>"; };
 		0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
 		0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		0D2BAF772F52BEF800C524B2 /* PilotLandingView1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PilotLandingView1.swift; sourceTree = "<group>"; };
-		0D2BAF792F52CBA300C524B2 /* HealthStore11.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore11.swift; sourceTree = "<group>"; };
 		0D73D9F52F459B1A00D69775 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		0D781BBD2F6107A200835BA8 /* ProfileOnboardingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileOnboardingModule.swift; sourceTree = "<group>"; };
 		0DC5DC5C2F3C606100A86516 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0DC5DC5E2F3C60F800A86516 /* MainPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPageView.swift; sourceTree = "<group>"; };
 		0DC5DC602F3C623400A86516 /* ResetSuccessful.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetSuccessful.swift; sourceTree = "<group>"; };
@@ -119,6 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0D781BC12F6126BD00835BA8 /* libxlsxwriter in Frameworks */,
 				0DC5DC5B2F3C5FAD00A86516 /* FirebaseCore in Frameworks */,
 				0DE4CE6D2F56BE500079F59F /* FirebaseFirestore in Frameworks */,
 				0DC5DC592F3C5FA500A86516 /* FirebaseAuth in Frameworks */,
@@ -233,9 +233,9 @@
 		1AC61F672A59229100466E1E /* Activity */ = {
 			isa = PBXGroup;
 			children = (
+				0D781BBD2F6107A200835BA8 /* ProfileOnboardingModule.swift */,
 				0DE4CE6E2F56C8340079F59F /* Admin */,
 				0DE4CE632F5664960079F59F /* Pilot */,
-				0D2BAF772F52BEF800C524B2 /* PilotLandingView1.swift */,
 				0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */,
 				1AABE6132A56622900F4572D /* ActivityView.swift */,
 				0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */,
@@ -252,7 +252,6 @@
 			isa = PBXGroup;
 			children = (
 				1AFFA80A2A5445CA00120F81 /* HealthStore.swift */,
-				0D2BAF792F52CBA300C524B2 /* HealthStore11.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -326,6 +325,7 @@
 				0DC5DC5A2F3C5FAD00A86516 /* FirebaseCore */,
 				0D1D4A6D2F4EBB8D001EF527 /* GaugeKit */,
 				0DE4CE6C2F56BE500079F59F /* FirebaseFirestore */,
+				0D781BC02F6126BD00835BA8 /* libxlsxwriter */,
 			);
 			productName = iSteps;
 			productReference = 1AFFA7F72A5439A700120F81 /* iSteps.app */;
@@ -358,6 +358,7 @@
 			packageReferences = (
 				0DC5DC572F3C5F2900A86516 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				0D1D4A6C2F4EBB8D001EF527 /* XCRemoteSwiftPackageReference "gaugekit" */,
+				0D781BBF2F6126BD00835BA8 /* XCRemoteSwiftPackageReference "libxlsxwriter" */,
 			);
 			productRefGroup = 1AFFA7F82A5439A700120F81 /* Products */;
 			projectDirPath = "";
@@ -392,10 +393,10 @@
 				0DC5DC5F2F3C60F800A86516 /* MainPageView.swift in Sources */,
 				1AABE60A2A55811600F4572D /* ActivityRectangle.swift in Sources */,
 				1A9BB7F62A5A847100C6074A /* SharingView.swift in Sources */,
-				0D2BAF7A2F52CBA300C524B2 /* HealthStore11.swift in Sources */,
 				1AABE6142A56622900F4572D /* ActivityView.swift in Sources */,
 				1AABE6122A56610900F4572D /* Step.swift in Sources */,
 				1AABE6162A56678800F4572D /* DetailActivityView.swift in Sources */,
+				0D781BBE2F6107A200835BA8 /* ProfileOnboardingModule.swift in Sources */,
 				1AFFA7FD2A5439A700120F81 /* ContentView.swift in Sources */,
 				1AFFA80D2A54461C00120F81 /* Date+Extension.swift in Sources */,
 				1AC61F6B2A593EEC00466E1E /* Fitness+View.swift in Sources */,
@@ -403,7 +404,6 @@
 				0D1D4A722F4ECB4C001EF527 /* SettingsView.swift in Sources */,
 				0DC5DC6D2F3C623400A86516 /* TextFieldView.swift in Sources */,
 				0DC5DC6E2F3C623400A86516 /* ResetPasswordView.swift in Sources */,
-				0D2BAF782F52BEF800C524B2 /* PilotLandingView1.swift in Sources */,
 				0DC5DC6F2F3C623400A86516 /* RegistrationInputPage.swift in Sources */,
 				0DC5DC702F3C623400A86516 /* LoginView.swift in Sources */,
 				0DC5DC712F3C623400A86516 /* ResetSuccessful.swift in Sources */,
@@ -660,6 +660,14 @@
 				kind = branch;
 			};
 		};
+		0D781BBF2F6126BD00835BA8 /* XCRemoteSwiftPackageReference "libxlsxwriter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jmcnamara/libxlsxwriter";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		0DC5DC572F3C5F2900A86516 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -675,6 +683,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0D1D4A6C2F4EBB8D001EF527 /* XCRemoteSwiftPackageReference "gaugekit" */;
 			productName = GaugeKit;
+		};
+		0D781BC02F6126BD00835BA8 /* libxlsxwriter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0D781BBF2F6126BD00835BA8 /* XCRemoteSwiftPackageReference "libxlsxwriter" */;
+			productName = libxlsxwriter;
 		};
 		0DC5DC582F3C5FA500A86516 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;

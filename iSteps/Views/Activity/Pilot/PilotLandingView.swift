@@ -27,6 +27,7 @@ struct PilotLandingView: View {
     @State var showAdminSheet = false
     @State var adminPassword = ""
     @State var showWrongPasswordAlert = false
+    
 
     // Presents the external survey using Safari (same as BurnoutScoreView).
     @State var isSurveyPresented = false
@@ -41,6 +42,8 @@ struct PilotLandingView: View {
 
     @State var nextSurveyText: String = "Not scheduled"
     @State var surveyOverdue: Bool = false
+    @State private var showProfileOnboarding = false
+    @State private var saveError: String? = nil
 
     // Update this URL if you switch survey providers.
     private let surveyURLString: String = "https://form.typeform.com/to/STFEkNs0"
@@ -154,7 +157,56 @@ struct PilotLandingView: View {
                 upsertParticipantProfile()
                 refreshAllStatuses()
                 backfillLastDaysIfNeeded(days: 14)
+                checkProfileNeedsOnboarding()
+                
             }
+        }
+        .fullScreenCover(isPresented: $showProfileOnboarding) {
+            ProfileOnboardingView(
+                allowSkip: true,
+                onContinue: { sex, age in
+                    // Use Firebase Auth UID as the canonical participant document id.
+                    guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
+                        saveError = "Not logged in."
+                        return
+                    }
+
+                    let db = Firestore.firestore()
+
+                    // Write Sex/Age to the participant root document: participants/{uid}
+                    let data: [String: Any] = [
+                        "sexAtBirth": sex.rawValue,
+                        "ageRange": age.rawValue,
+                        "schemaVersion": 1,
+                        "updatedAt": FieldValue.serverTimestamp(),
+                        "createdAt": FieldValue.serverTimestamp(),
+
+                        // Optional: keep your local participantId as metadata (do NOT use it as the doc id).
+                        "participantId": participantId
+                    ]
+
+                    db.collection("participants")
+                        .document(uid)
+                        .setData(data, merge: true) { err in
+                            if let err = err {
+                                saveError = err.localizedDescription
+                                return
+                            }
+                            showProfileOnboarding = false
+                        }
+                },
+                onSkip: {
+                    showProfileOnboarding = false
+                }
+            )
+        }
+        .alert("Save failed", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
         }
     }
 }
@@ -225,7 +277,6 @@ extension PilotLandingView {
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
     }
-
     var studyStatusCard: some View {
         let day = studyDayIndex()
         let remaining = max(0, studyTotalDays - day)
@@ -429,6 +480,36 @@ extension PilotLandingView {
                 .foregroundColor(Color.white)
             }
         }
+    }
+    private func checkProfileNeedsOnboarding() {
+        // Use Firebase Auth UID as the Firestore document id.
+        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
+            // If auth isn't ready yet, try again shortly (avoid missing the onboarding).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                checkProfileNeedsOnboarding()
+            }
+            return
+        }
+
+        Firestore.firestore()
+            .collection("participants")
+            .document(uid)
+            .getDocument { snap, err in
+                if let err = err {
+                    print("Profile read error: \(err.localizedDescription)")
+                    return
+                }
+
+                let data = snap?.data() ?? [:]
+                let sex = (data["sexAtBirth"] as? String) ?? ""
+                let age = (data["ageRange"] as? String) ?? ""
+
+                if sex.isEmpty || age.isEmpty {
+                    DispatchQueue.main.async {
+                        showProfileOnboarding = true
+                    }
+                }
+            }
     }
 }
 
