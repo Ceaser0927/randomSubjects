@@ -9,7 +9,7 @@ import libxlsxwriter
 
 struct ParticipantItem: Identifiable {
     let id: String      // uid
-    let display: String // email (or uid fallback)
+    let display: String
     let email: String
     let updatedAt: Date?
 }
@@ -243,11 +243,24 @@ struct AdminDashboardView: View {
         )
     }
 
+    private func participantLabel(for participant: ParticipantItem) -> String {
+        let cleanEmail = participant.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanEmail.isEmpty { return cleanEmail }
+
+        let cleanDisplay = participant.display.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanDisplay.isEmpty, cleanDisplay != participant.id { return cleanDisplay }
+
+        return participant.id
+    }
+
     private var selectedParticipantDisplay: String {
         if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }) {
-            return p.display
+            return participantLabel(for: p)
         }
-        return participants.first?.display ?? "Select"
+        if let first = participants.first {
+            return participantLabel(for: first)
+        }
+        return "Select"
     }
 
     private var selectorCard: some View {
@@ -272,7 +285,13 @@ struct AdminDashboardView: View {
                                     selectedUID = p.id
                                     reloadDaily()
                                 } label: {
-                                    Text(p.display)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(participantLabel(for: p))
+                                        if p.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(p.id)
+                                                .font(.caption)
+                                        }
+                                    }
                                 }
                             }
                         } label: {
@@ -283,6 +302,13 @@ struct AdminDashboardView: View {
                                     .foregroundColor(.accentColor)
                             }
                         }
+                    }
+
+                    if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }), p.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Email is unavailable for this participant until they log in again and refresh their admin index. Using UID for selection now.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
 
@@ -336,16 +362,26 @@ struct AdminDashboardView: View {
                     Spacer()
 
                     if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }) {
-                        Text(p.display)
-                            .font(.system(.caption, design: .rounded).weight(.bold))
-                            .foregroundColor(.white.opacity(0.85))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.white.opacity(0.08))
-                            .clipShape(Capsule())
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .minimumScaleFactor(0.85)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(participantLabel(for: p))
+                                .font(.system(.caption, design: .rounded).weight(.bold))
+                                .foregroundColor(.white.opacity(0.85))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .minimumScaleFactor(0.85)
+
+                            if p.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(p.id)
+                                    .font(.system(.caption2, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.55))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.white.opacity(0.08))
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -631,45 +667,90 @@ struct AdminDashboardView: View {
     private func loadParticipantsThenDaily() {
         isLoading = true
         let db = Firestore.firestore()
+        let group = DispatchGroup()
 
+        var participantDocs: [QueryDocumentSnapshot] = []
+        var adminIndexDocs: [QueryDocumentSnapshot] = []
+        var loadError: String?
+
+        group.enter()
         db.collection("participants")
-            .order(by: "updatedAt", descending: true)
             .limit(to: 300)
             .getDocuments { snap, err in
                 if let err {
-                    isLoading = false
-                    errorText = "Load participants failed: \(err.localizedDescription)"
-                    return
+                    loadError = "Load participants failed: \(err.localizedDescription)"
+                } else {
+                    participantDocs = snap?.documents ?? []
                 }
-
-                let list: [ParticipantItem] = (snap?.documents ?? []).map { d in
-                    let data = d.data()
-                    let email = data["email"] as? String ?? ""
-                    let display = data["display"] as? String ?? (email.isEmpty ? d.documentID : email)
-
-                    let updatedAt: Date?
-                    if let ts = data["updatedAt"] as? Timestamp {
-                        updatedAt = ts.dateValue()
-                    } else {
-                        updatedAt = nil
-                    }
-
-                    return ParticipantItem(
-                        id: d.documentID,
-                        display: display,
-                        email: email,
-                        updatedAt: updatedAt
-                    )
-                }
-
-                self.participants = list
-
-                if self.selectedUID == nil {
-                    self.selectedUID = list.first?.id
-                }
-
-                self.reloadDaily()
+                group.leave()
             }
+
+        group.enter()
+        db.collection("admin_participant_index")
+            .limit(to: 300)
+            .getDocuments { snap, err in
+                if let err {
+                    loadError = loadError ?? "Load participant index failed: \(err.localizedDescription)"
+                } else {
+                    adminIndexDocs = snap?.documents ?? []
+                }
+                group.leave()
+            }
+
+        group.notify(queue: .main) {
+            if let loadError {
+                isLoading = false
+                errorText = loadError
+                return
+            }
+
+            let participantMap = Dictionary(uniqueKeysWithValues: participantDocs.map { ($0.documentID, $0.data()) })
+            let adminIndexMap = Dictionary(uniqueKeysWithValues: adminIndexDocs.map { ($0.documentID, $0.data()) })
+            let allUIDs = Set(participantMap.keys).union(adminIndexMap.keys)
+
+            let list: [ParticipantItem] = allUIDs.map { uid in
+                let participantData = participantMap[uid] ?? [:]
+                let adminData = adminIndexMap[uid] ?? [:]
+
+                let email = (adminData["email"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let display = ((adminData["display"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? (email.isEmpty ? uid : email)
+
+                let adminUpdatedAt = (adminData["updatedAt"] as? Timestamp)?.dateValue()
+                let participantUpdatedAt = (participantData["updatedAt"] as? Timestamp)?.dateValue()
+                let updatedAt = max(adminUpdatedAt ?? .distantPast, participantUpdatedAt ?? .distantPast)
+
+                return ParticipantItem(
+                    id: uid,
+                    display: display,
+                    email: email,
+                    updatedAt: updatedAt == .distantPast ? nil : updatedAt
+                )
+            }
+            .sorted { lhs, rhs in
+                switch (lhs.updatedAt, rhs.updatedAt) {
+                case let (l?, r?):
+                    return l > r
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return lhs.id < rhs.id
+                }
+            }
+
+            self.participants = list
+
+            if let selectedUID, list.contains(where: { $0.id == selectedUID }) == false {
+                self.selectedUID = nil
+            }
+
+            if self.selectedUID == nil {
+                self.selectedUID = list.first?.id
+            }
+
+            self.reloadDaily()
+        }
     }
 
     private func reloadDaily() {
@@ -705,7 +786,7 @@ struct AdminDashboardView: View {
 
     private func exportCSV() {
         guard let uid = selectedUID else { return }
-        let display = participants.first(where: { $0.id == uid })?.display ?? uid
+        let display = participants.first(where: { $0.id == uid }).map(participantLabel(for:)) ?? uid
 
         let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
 
@@ -819,7 +900,7 @@ struct AdminDashboardView: View {
     }
     private func exportJSONFull() {
         guard let uid = selectedUID else { return }
-        let display = participants.first(where: { $0.id == uid })?.display ?? uid
+        let display = participants.first(where: { $0.id == uid }).map(participantLabel(for:)) ?? uid
 
         isLoading = true
         errorText = nil
@@ -834,7 +915,7 @@ struct AdminDashboardView: View {
                 return
             }
 
-            let participantData = pSnap?.data() ?? [:]
+                    let participantData = normalizeTimestamps(pSnap?.data() ?? [:])
 
             let group = DispatchGroup()
 
@@ -883,7 +964,7 @@ struct AdminDashboardView: View {
                 let payload: [String: Any] = [
                     "uid": uid,
                     "exportedAt": iso8601(Date()),
-                    "participant": normalizeTimestamps(participantData),
+                    "participant": participantData,
                     "daily": dailyDocs,
                     "sleep_nightly": sleepDocs
                 ]
@@ -930,7 +1011,7 @@ struct AdminDashboardView: View {
     }
     private func exportXLSX() {
         guard let uid = selectedUID else { return }
-        let display = participants.first(where: { $0.id == uid })?.display ?? uid
+        let display = participants.first(where: { $0.id == uid }).map(participantLabel(for:)) ?? uid
         let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
 
         // 文件名

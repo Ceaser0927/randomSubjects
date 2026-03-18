@@ -175,11 +175,14 @@ struct PilotLandingView: View {
 
                     // Write Sex/Age to the participant root document: participants/{uid}
                     let data: [String: Any] = [
+                        "uid": uid,
                         "sexAtBirth": sex.rawValue,
                         "ageRange": age.rawValue,
                         "schemaVersion": 1,
                         "updatedAt": FieldValue.serverTimestamp(),
                         "createdAt": FieldValue.serverTimestamp(),
+                        "email": FieldValue.delete(),
+                        "display": FieldValue.delete(),
 
                         // Optional: keep your local participantId as metadata (do NOT use it as the doc id).
                         "participantId": participantId
@@ -192,6 +195,7 @@ struct PilotLandingView: View {
                                 saveError = err.localizedDescription
                                 return
                             }
+                            upsertParticipantProfile()
                             showProfileOnboarding = false
                         }
                 },

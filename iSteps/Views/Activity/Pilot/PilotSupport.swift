@@ -258,8 +258,7 @@ struct PilotSafariView: UIViewControllerRepresentable {
 
 extension PilotLandingView {
 
-    // MARK: - Participant profile upsert (email -> participants/{uid})
-    // This enables admin dashboard to list users by email.
+    // MARK: - Participant profile upsert
 
     func backfillLastDaysIfNeeded(days: Int = 14) {
 
@@ -329,23 +328,46 @@ extension PilotLandingView {
     func upsertParticipantProfile() {
         guard let user = Auth.auth().currentUser else { return }
         let uid = user.uid
+        let db = Firestore.firestore()
+        let participantRef = db.collection("participants").document(uid)
+        let adminIndexRef = db.collection("admin_participant_index").document(uid)
         let email = user.email ?? ""
+        let display = user.displayName ?? (email.isEmpty ? uid : email)
+        let participantIdValue = participantId
+        var participantData: [String: Any] = [
+            "uid": uid,
+            "schemaVersion": 1,
+            "updatedAt": FieldValue.serverTimestamp(),
+            "email": FieldValue.delete(),
+            "display": FieldValue.delete()
+        ]
 
-        Firestore.firestore()
-            .collection("participants")
-            .document(uid)
-            .setData([
-                "uid": uid,
-                "email": email,
-                "display": email.isEmpty ? uid : email,
-                "updatedAt": FieldValue.serverTimestamp()
-            ], merge: true) { error in
-                if let error {
-                    print("⚠️ upsertParticipantProfile failed: \(error)")
-                } else {
-                    print("✅ upsertParticipantProfile ok: participants/\(uid)")
-                }
+        if !participantIdValue.isEmpty {
+            participantData["participantId"] = participantIdValue
+        }
+
+        participantRef.setData(participantData, merge: true) { error in
+            if let error {
+                print("⚠️ participant profile upsert failed: \(error)")
+            } else {
+                print("✅ participant profile upsert ok: participants/\(uid)")
             }
+        }
+
+        let adminIndexData: [String: Any] = [
+            "uid": uid,
+            "email": email,
+            "display": display,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+
+        adminIndexRef.setData(adminIndexData, merge: true) { error in
+            if let error {
+                print("⚠️ admin participant index upsert failed: \(error)")
+            } else {
+                print("✅ admin participant index upsert ok: admin_participant_index/\(uid)")
+            }
+        }
     }
 
     // MARK: - Upload Now integration (NO new button; called by existing button)
@@ -358,7 +380,7 @@ extension PilotLandingView {
             return
         }
 
-        // Ensure participant root doc has email for admin listing.
+        // Ensure participant records exist before upload starts.
         upsertParticipantProfile()
 
         // Mark pending immediately for UI.
