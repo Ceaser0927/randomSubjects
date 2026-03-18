@@ -33,58 +33,64 @@ struct ResetPasswordView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            VStack(alignment: .trailing) {
+        VStack(spacing: 0) {
+
+            // Top bar
+            HStack {
+                Spacer()
                 Button("Cancel") {
-                    self.presentedBinding = false
+                    presentedBinding = false
                 }
-                .padding()
-                
-                VStack {
-                    Spacer()
-                    
-                    Image("reset")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: geometry.size.height * 0.35, alignment: .center)
-                    
-                    Spacer()
-                    
-                    VStack {
-                        Text("Forgot Password?")
-                            .bold()
-                            .font(.title)
-                            .padding(.vertical)
-                        Text("Enter the email address associated with you account")
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.vertical)
-                
-                    TextFieldView(string: self.$email,
-                                  passwordMode: false,
-                                  placeholder: "Enter your email",
-                                  iconName: "envelope.fill")
-                        .padding(.bottom, 40)
-                    
-                    Button(action: { self.resetPassword() }) {
-                        Rectangle()
-                            .fill(Color.init(#colorLiteral(red: 0.2392156869, green: 0.6745098233, blue: 0.9686274529, alpha: 1)))
-                            .frame(height: 50, alignment: .center)
-                            .overlay(Text("Reset").foregroundColor(.white).bold())
-                            .cornerRadius(8)
-                    }
-                        .alert(isPresented: self.$isShowingAlert) {
-                            Alert(title: Text("Error!"),
-                                  message: Text(self.errorMessage!),
-                                  dismissButton: .destructive(Text("OK")))
-                        }
-                    .padding(.bottom)
-                }
-                .keyboardAdaptive()
-                .padding(.horizontal, 30)
+                .foregroundColor(.cosmicBlue)
+                .font(.footnote.weight(.semibold))
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+
+            Spacer() // 把标题推到中间
+
+            // Center: title + subtitle
+            VStack(spacing: 10) {
+                Text("Forgot Password?")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+
+                Text("Enter the email address associated with your account")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+
+            Spacer() // 把输入框/按钮推到底部
+
+            // Bottom: input + button
+            VStack(spacing: 18) {
+                MinimalInputField(
+                    text: $email,
+                    placeholder: "Email",
+                    systemImage: "envelope",
+                    isSecure: false
+                )
+
+                Button(action: { resetPassword() }) {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.cosmicBlue)
+                        .frame(height: 52)
+                        .overlay(Text("Reset").foregroundColor(.white).bold())
+                }
+                .alert(isPresented: $isShowingAlert) {
+                    Alert(
+                        title: Text("Error"),
+                        message: Text(errorMessage ?? "Unknown error"),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.bottom, 28)
         }
+        .keyboardAdaptive()
     }
 }
 

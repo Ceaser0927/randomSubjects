@@ -78,12 +78,10 @@ struct LoginButtons: View {
             HStack {
                 Text("No account?")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.55)) // match placeholder contrast
                 Button(action: { self.showingSignUpPage = true }) {
                     Text("Sign Up")
-                        .foregroundColor(.blue)
-                        .bold()
-                        .font(.footnote)
+                        .foregroundColor(.cosmicBlue)
                 }
                 .sheet(isPresented: self.$showingSignUpPage) {
                     RegistrationPageView(presentedBinding: self.$showingSignUpPage, session: self.session)

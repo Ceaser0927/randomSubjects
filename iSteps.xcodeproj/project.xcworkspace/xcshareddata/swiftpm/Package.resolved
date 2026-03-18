@@ -1,5 +1,5 @@
 {
-  "originHash" : "c63c63846d9c539229e96de38d6af51417e28c0ee9a0bc48bd0f0f19d923c329",
+  "originHash" : "907171aacccca927a80a5b1d5e50976e05793d85c86c5e71004267d2da7fd327",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "9b3aed4fa6226125305b82d4d86c715bef250785",
         "version" : "12.9.0"
+      }
+    },
+    {
+      "identity" : "gaugekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/antonmartinsson/gaugekit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "0042cf87802d4bf5866cd5ff3493cec32676e27d"
       }
     },
     {
@@ -98,6 +107,15 @@
       "state" : {
         "revision" : "a0bc79961d7be727d258d33d5a6b2f1023270ba1",
         "version" : "1.22.5"
+      }
+    },
+    {
+      "identity" : "libxlsxwriter",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jmcnamara/libxlsxwriter",
+      "state" : {
+        "branch" : "main",
+        "revision" : "2894634d65cee6021901a165bfc2bb0fad6da193"
       }
     },
     {
