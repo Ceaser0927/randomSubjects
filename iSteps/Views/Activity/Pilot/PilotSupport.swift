@@ -69,7 +69,7 @@ struct FullTabView: View {
     }
 }
 
-// MARK: - Upload State (pilot UI)
+// MARK: - Upload State
 
 enum PilotUploadState: String {
     case ok
@@ -129,9 +129,21 @@ enum PilotTodaySignals {
         let hrvOK: Bool
         let rhrOK: Bool
         let energyOK: Bool
+        let heartRateOK: Bool
+        let respiratoryOK: Bool
+        let oxygenOK: Bool
 
         var collectedCount: Int {
-            [stepsOK, sleepOK, hrvOK, rhrOK, energyOK].filter { $0 }.count
+            [
+                stepsOK,
+                sleepOK,
+                hrvOK,
+                rhrOK,
+                energyOK,
+                heartRateOK,
+                respiratoryOK,
+                oxygenOK
+            ].filter { $0 }.count
         }
     }
 }
@@ -254,22 +266,19 @@ struct PilotSafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) { }
 }
 
-// MARK: - PilotLandingView Helpers (Non-HealthKit)
+// MARK: - PilotLandingView Helpers
 
 extension PilotLandingView {
 
     // MARK: - Participant profile upsert
 
     func backfillLastDaysIfNeeded(days: Int = 14) {
-
-        // No flag: always attempt backfill (safe because daily docs are overwritten by dateId).
         guard let uid = Auth.auth().currentUser?.uid else {
             print("Backfill blocked: not logged in")
             return
         }
 
         refreshHealthAuthorizationReliable {
-
             guard self.healthAuthorized else {
                 print("Backfill failed: HealthKit not authorized")
                 return
@@ -292,20 +301,16 @@ extension PilotLandingView {
                         return
                     }
 
-                    // Only backfill days that likely contain Apple Watch physiological data.
                     guard let watchLikelyDay = dailyPayload["watchLikelyDay"] as? Bool, watchLikelyDay else {
                         print("Backfill skipped \(dateId): likely iPhone-only day")
                         group.leave()
                         return
                     }
 
-                    // Best-effort: fetch nightly sleep structure and write it to sleep_nightly.
-                    // If nightly is missing, we still write daily so Pilot remains stable.
                     self.fetchNightlySleepStages(anchorDate: day) { nightly in
                         if let nightly {
                             self.writeSleepNightlyToFirestore(uid: uid, nightly: nightly) { sleepKey in
                                 if let sleepKey {
-                                    // Store a pointer on daily for easy joins.
                                     dailyPayload["primarySleepNightlyId"] = sleepKey
                                 }
                                 self.writeDailyPayloadToFirestore(uid: uid, dateId: dateId, payload: dailyPayload)
@@ -320,20 +325,23 @@ extension PilotLandingView {
             }
 
             group.notify(queue: .main) {
-                print("Backfill completed (no flag)")
+                print("Backfill completed")
             }
         }
     }
 
     func upsertParticipantProfile() {
         guard let user = Auth.auth().currentUser else { return }
+
         let uid = user.uid
         let db = Firestore.firestore()
         let participantRef = db.collection("participants").document(uid)
         let adminIndexRef = db.collection("admin_participant_index").document(uid)
+
         let email = user.email ?? ""
         let display = user.displayName ?? (email.isEmpty ? uid : email)
         let participantIdValue = participantId
+
         var participantData: [String: Any] = [
             "uid": uid,
             "schemaVersion": 1,
@@ -370,23 +378,18 @@ extension PilotLandingView {
         }
     }
 
-    // MARK: - Upload Now integration (NO new button; called by existing button)
+    // MARK: - Upload action
 
     func uploadNowTapped() {
-        // Must be logged in.
         guard let uid = Auth.auth().currentUser?.uid else {
             uploadStateRaw = PilotUploadState.failed.rawValue
             print("❌ Upload blocked: not logged in")
             return
         }
 
-        // Ensure participant records exist before upload starts.
         upsertParticipantProfile()
-
-        // Mark pending immediately for UI.
         uploadStateRaw = PilotUploadState.pending.rawValue
 
-        // Ensure HealthKit access, then fetch values, then upload.
         refreshHealthAuthorizationReliable {
             guard self.healthAuthorized else {
                 self.uploadStateRaw = PilotUploadState.failed.rawValue
@@ -396,7 +399,6 @@ extension PilotLandingView {
 
             let today = Date()
 
-            // 1) Build daily payload (existing behavior preserved).
             self.fetchDailySummaryForUpload(for: today) { payload in
                 guard var dailyPayload = payload else {
                     self.uploadStateRaw = PilotUploadState.failed.rawValue
@@ -406,19 +408,15 @@ extension PilotLandingView {
 
                 let dateId = (dailyPayload["date"] as? String) ?? Self.todayDateId()
 
-                // 2) Fetch nightly sleep structure (best-effort).
                 self.fetchNightlySleepStages(anchorDate: today) { nightly in
                     if let nightly {
-                        // 2a) Write nightly doc first, then attach pointer to daily.
                         self.writeSleepNightlyToFirestore(uid: uid, nightly: nightly) { sleepKey in
                             if let sleepKey {
                                 dailyPayload["primarySleepNightlyId"] = sleepKey
                             }
-                            // 3) Write daily (this controls the UI success/failure state).
                             self.writeDailyPayloadToFirestore(uid: uid, dateId: dateId, payload: dailyPayload)
                         }
                     } else {
-                        // Nightly missing: still upload daily so Pilot remains stable.
                         self.writeDailyPayloadToFirestore(uid: uid, dateId: dateId, payload: dailyPayload)
                     }
                 }
@@ -428,9 +426,7 @@ extension PilotLandingView {
 
     // MARK: - Daily payload builder
 
-    // Build payload for Firestore from HealthKit numeric queries.
     private func fetchDailySummaryForUpload(for date: Date, completion: @escaping ([String: Any]?) -> Void) {
-
         let dateId = Self.dateId(for: date)
         let group = DispatchGroup()
 
@@ -439,6 +435,11 @@ extension PilotLandingView {
         var hrvMs: Double? = nil
         var rhr: Double? = nil
         var sleepHours: Double? = nil
+
+        var heartRateAvg: Double? = nil
+        var heartRateMin: Double? = nil
+        var heartRateMax: Double? = nil
+        var bloodOxygenAvg: Double? = nil
 
         group.enter()
         fetchCumulativeNumber(for: date, .stepCount) { v in
@@ -470,16 +471,32 @@ extension PilotLandingView {
             group.leave()
         }
 
+        group.enter()
+        fetchHeartRateSummary(for: date) { avg, min, max in
+            heartRateAvg = avg
+            heartRateMin = min
+            heartRateMax = max
+            group.leave()
+        }
+
+        group.enter()
+        fetchDailyAverage(for: date, .oxygenSaturation) { v in
+            bloodOxygenAvg = v
+            group.leave()
+        }
+
         group.notify(queue: .main) {
             let hasSteps = (steps ?? 0) > 0
             let hasEnergy = (energy ?? 0) > 0
             let hasHRV = (hrvMs != nil)
             let hasRHR = (rhr != nil)
             let hasSleep = (sleepHours ?? 0) > 0
-            let watchLikelyDay = hasSleep || hasHRV || hasRHR
-            let phoneOnlyLikelyDay = (hasSteps || hasEnergy) && !watchLikelyDay
+            let hasHeartRate = (heartRateAvg != nil || heartRateMin != nil || heartRateMax != nil)
+            let hasOxygen = (bloodOxygenAvg != nil)
 
-            let validDay = hasSleep && (hasHRV || hasRHR) && (hasSteps || hasEnergy)
+            let watchLikelyDay = hasSleep || hasHRV || hasRHR || hasHeartRate || hasOxygen
+            let phoneOnlyLikelyDay = (hasSteps || hasEnergy) && !watchLikelyDay
+            let validDay = hasSleep && (hasHRV || hasRHR || hasHeartRate) && (hasSteps || hasEnergy)
 
             var payload: [String: Any] = [
                 "date": dateId,
@@ -488,15 +505,13 @@ extension PilotLandingView {
                 "hasHRV": hasHRV,
                 "hasRHR": hasRHR,
                 "hasSleep": hasSleep,
+                "hasHeartRate": hasHeartRate,
+                "hasOxygen": hasOxygen,
                 "validDay": validDay,
                 "syncedAt": FieldValue.serverTimestamp(),
                 "syncedAtEpoch": Date().timeIntervalSince1970,
                 "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
-
-                // Indicates this day likely contains Apple Watch physiological data.
                 "watchLikelyDay": watchLikelyDay,
-
-                // Indicates data likely came only from iPhone (no HRV/RHR/Sleep).
                 "phoneOnlyLikelyDay": phoneOnlyLikelyDay
             ]
 
@@ -505,6 +520,11 @@ extension PilotLandingView {
             if let hrvMs { payload["hrvSDNN_ms"] = hrvMs }
             if let rhr { payload["restingHR_bpm"] = rhr }
             if let sleepHours { payload["sleepHours"] = sleepHours }
+
+            if let heartRateAvg { payload["heartRateAvg"] = heartRateAvg }
+            if let heartRateMin { payload["heartRateMin"] = heartRateMin }
+            if let heartRateMax { payload["heartRateMax"] = heartRateMax }
+            if let bloodOxygenAvg { payload["bloodOxygenAvg"] = bloodOxygenAvg }
 
             completion(payload)
         }
@@ -532,10 +552,6 @@ extension PilotLandingView {
         }
     }
 
-    /// Writes a nightly sleep document using a unique sleepKey (docId).
-    /// This avoids overwriting when multiple sleeps exist for the same anchor day.
-    ///
-    /// Important: nightly is best-effort enrichment. If this fails, we still upload daily.
     private func writeSleepNightlyToFirestore(
         uid: String,
         nightly: SleepNightlyPayload,
@@ -549,8 +565,7 @@ extension PilotLandingView {
             .collection("sleep_nightly")
             .document(sleepKey)
 
-        // Store research-grade fields for reproducibility and later feature engineering.
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "schemaVersion": 1,
             "sleepKey": nightly.sleepKey,
             "anchorDateLocal": nightly.anchorDateLocal,
@@ -571,6 +586,10 @@ extension PilotLandingView {
             "createdAt": FieldValue.serverTimestamp(),
             "createdAtEpoch": Date().timeIntervalSince1970
         ]
+
+        if let respiratoryRateAvg = nightly.respiratoryRateAvg {
+            data["respiratoryRateAvg"] = respiratoryRateAvg
+        }
 
         docRef.setData(data, merge: true) { error in
             if let error {
@@ -644,7 +663,9 @@ extension PilotLandingView {
             Text(name)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
+
             Spacer()
+
             HStack(spacing: 6) {
                 Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .foregroundColor(ok ? .green.opacity(0.95) : .orange.opacity(0.95))
@@ -706,7 +727,7 @@ extension PilotLandingView {
         return f.string(from: d)
     }
 
-    // MARK: - DateId utility (doc id for Firestore)
+    // MARK: - DateId utility
 
     static func dateId(for date: Date) -> String {
         let f = DateFormatter()
@@ -718,6 +739,6 @@ extension PilotLandingView {
     }
 
     static func todayDateId() -> String {
-        return dateId(for: Date())
+        dateId(for: Date())
     }
 }
