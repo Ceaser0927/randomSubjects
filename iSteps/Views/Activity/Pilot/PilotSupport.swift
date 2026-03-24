@@ -658,6 +658,33 @@ extension PilotLandingView {
         )
     }
 
+
+
+    func demoDataCheckRow(name: String) -> some View {
+        HStack {
+            Text(name)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Image(systemName: "circle.fill")
+                    .foregroundColor(.white.opacity(0.75))
+                Text("Simulated")
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+        .padding(12)
+        .background(.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     func dataCheckRow(name: String, ok: Bool) -> some View {
         HStack {
             Text(name)

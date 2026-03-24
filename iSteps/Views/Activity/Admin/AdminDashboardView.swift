@@ -202,6 +202,9 @@ struct AdminDashboardView: View {
 
     @State private var exportURL: URL? = nil
     @State private var showShare: Bool = false
+    @State private var researchTapCount: Int = 0
+
+    @AppStorage("irb_mode") private var isIRBMode = false
 
     var body: some View {
         NavigationView {
@@ -322,7 +325,7 @@ struct AdminDashboardView: View {
                     Text("Admin Dashboard")
                         .font(.system(.headline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Select participant • Review trends • Export study data")
+                    Text(isIRBMode ? "IRB Demo Mode • Review simulated study data" : "Select participant • Review trends • Export study data")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundColor(.white.opacity(0.65))
                 }
@@ -336,6 +339,14 @@ struct AdminDashboardView: View {
                     .padding(.vertical, 6)
                     .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        researchTapCount += 1
+                        if researchTapCount >= 3 {
+                            isIRBMode.toggle()
+                            researchTapCount = 0
+                        }
+                    }
             }
 
             Divider().overlay(Color.white.opacity(0.12))
@@ -345,7 +356,7 @@ struct AdminDashboardView: View {
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
-                Text(Auth.auth().currentUser?.email ?? "Unknown")
+                Text(isIRBMode ? "demo_user@test.com" : (Auth.auth().currentUser?.email ?? "Unknown"))
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -456,7 +467,7 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text("\(dailyRows.count) daily • \(sleepRows.count) nightly")
+                    Text(isIRBMode ? "0 daily • 0 nightly" : "\(dailyRows.count) daily • \(sleepRows.count) nightly")
                         .font(.system(.caption, design: .rounded).weight(.bold))
                         .foregroundColor(.white.opacity(0.85))
                         .padding(.horizontal, 10)
@@ -512,26 +523,38 @@ struct AdminDashboardView: View {
 
     private func latestSummaryCard(_ latest: DailyRow) -> some View {
         let respiratory = latestRespiratoryForSummary(latestDateId: latest.dateId)
+        let displayDate = isIRBMode ? "Demo Data" : latest.dateId
+        let displaySteps = isIRBMode ? "0" : (latest.steps.map(String.init) ?? "—")
+        let displaySleep = isIRBMode ? "0" : (latest.sleepHours.map { String(format: "%.2f", $0) } ?? "—")
+        let displayHRV = isIRBMode ? "0" : (latest.hrvSDNNms.map { String(format: "%.2f", $0) } ?? "—")
+        let displayRHR = isIRBMode ? "0" : (latest.restingHRbpm.map { String(format: "%.0f", $0) } ?? "—")
+        let displayHeartRate = isIRBMode ? "0 / 0 / 0" : heartRateSummaryText(latest)
+        let displayRespiratory = isIRBMode ? "0" : (respiratory.map { String(format: "%.2f", $0) } ?? "—")
+        let displayOxygen = isIRBMode ? "0" : (latest.bloodOxygenAvg.map { String(format: "%.1f", $0) } ?? "—")
+        let displayEnergy = isIRBMode ? "0" : (latest.activeEnergyKcal.map { String(format: "%.1f", $0) } ?? "—")
+        let displayValidDay = isIRBMode ? "false" : ((latest.validDay ?? false) ? "true" : "false")
+        let displayValidDayColor = isIRBMode ? Color.orange.opacity(0.95) : ((latest.validDay ?? false) ? .green.opacity(0.9) : .orange.opacity(0.95))
+        let displaySyncedAt = isIRBMode ? "Disabled" : (latest.syncedAt.map(formatDateTime) ?? "—")
 
         return glassCard(title: "Latest Summary", trailingIcon: "doc.plaintext") {
             VStack(spacing: 10) {
-                statusRow(title: "Date", value: latest.dateId, valueColor: .white.opacity(0.9), icon: "calendar")
-                statusRow(title: "Steps", value: latest.steps.map(String.init) ?? "—", valueColor: .white.opacity(0.9), icon: "figure.walk")
-                statusRow(title: "Sleep (h)", value: latest.sleepHours.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "bed.double")
-                statusRow(title: "HRV SDNN (ms)", value: latest.hrvSDNNms.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "waveform.path.ecg")
-                statusRow(title: "Resting HR (bpm)", value: latest.restingHRbpm.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "heart")
+                statusRow(title: "Date", value: displayDate, valueColor: .white.opacity(0.9), icon: "calendar")
+                statusRow(title: "Steps", value: displaySteps, valueColor: .white.opacity(0.9), icon: "figure.walk")
+                statusRow(title: "Sleep (h)", value: displaySleep, valueColor: .white.opacity(0.9), icon: "bed.double")
+                statusRow(title: "HRV SDNN (ms)", value: displayHRV, valueColor: .white.opacity(0.9), icon: "waveform.path.ecg")
+                statusRow(title: "Resting HR (bpm)", value: displayRHR, valueColor: .white.opacity(0.9), icon: "heart")
 //                statusRow(title: "Heart Rate Avg (bpm)", value: latest.heartRateAvg.map { String(format: "%.1f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "heart.text.square")
 //                statusRow(title: "Heart Rate Min (bpm)", value: latest.heartRateMin.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "arrow.down.heart")
 //                statusRow(title: "Heart Rate Max (bpm)", value: latest.heartRateMax.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "arrow.up.heart")
                 statusRow(
                     title: "Heart Rate (avg / min / max)",
-                    value: heartRateSummaryText(latest),
+                    value: displayHeartRate,
                     valueColor: .white.opacity(0.9),
                     icon: "heart.text.square"
                 )
-                statusRow(title: "Respiratory Rate", value: respiratory.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "lungs.fill")
-                statusRow(title: "Blood Oxygen (%)", value: latest.bloodOxygenAvg.map { String(format: "%.1f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "drop.fill")
-                statusRow(title: "Active Energy (kcal)", value: latest.activeEnergyKcal.map { String(format: "%.1f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "flame")
+                statusRow(title: "Respiratory Rate", value: displayRespiratory, valueColor: .white.opacity(0.9), icon: "lungs.fill")
+                statusRow(title: "Blood Oxygen (%)", value: displayOxygen, valueColor: .white.opacity(0.9), icon: "drop.fill")
+                statusRow(title: "Active Energy (kcal)", value: displayEnergy, valueColor: .white.opacity(0.9), icon: "flame")
 
                 Divider().overlay(.white.opacity(0.12))
 
@@ -540,9 +563,9 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text((latest.validDay ?? false) ? "true" : "false")
+                    Text(displayValidDay)
                         .font(.system(.subheadline, design: .rounded).weight(.bold))
-                        .foregroundColor((latest.validDay ?? false) ? .green.opacity(0.9) : .orange.opacity(0.95))
+                        .foregroundColor(displayValidDayColor)
                 }
 
                 HStack {
@@ -550,7 +573,7 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text(latest.syncedAt.map(formatDateTime) ?? "—")
+                    Text(displaySyncedAt)
                         .font(.system(.footnote, design: .rounded))
                         .foregroundColor(.white.opacity(0.75))
                 }
@@ -639,6 +662,25 @@ struct AdminDashboardView: View {
     private func buildTrendPoints(metric: AdminMetric) -> [ChartPoint] {
         let dailySorted = dailyRows.sorted(by: { $0.dateId < $1.dateId })
         let sleepSorted = sleepRows.sorted(by: { $0.anchorDateLocal < $1.anchorDateLocal })
+
+        if isIRBMode {
+            switch metric {
+            case .respiratory:
+                let respiratoryDates = sleepSorted.map(\.anchorDateLocal).filter { !$0.isEmpty }
+                return respiratoryDates.isEmpty
+                    ? dailySorted.map { ChartPoint(dateId: $0.dateId, value: 0, series: "Respiratory") }
+                    : respiratoryDates.map { ChartPoint(dateId: $0, value: 0, series: "Respiratory") }
+            case .all:
+                let seriesNames = ["Steps", "Sleep", "HRV", "RHR", "Heart Rate", "Respiratory", "Oxygen", "Energy"]
+                let dates = dailySorted.map(\.dateId)
+                return dates.flatMap { dateId in
+                    seriesNames.map { ChartPoint(dateId: dateId, value: 0, series: $0) }
+                }
+            default:
+                let seriesName = metric.rawValue
+                return dailySorted.map { ChartPoint(dateId: $0.dateId, value: 0, series: seriesName) }
+            }
+        }
 
         switch metric {
         case .steps:
@@ -757,7 +799,7 @@ struct AdminDashboardView: View {
     private var exportCard: some View {
         glassCard(title: "Export", trailingIcon: "square.and.arrow.up") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Export the selected participant’s filtered range data, including the new heart rate, respiratory, and blood oxygen fields.")
+                Text(isIRBMode ? "Export demo-view data for IRB review screens." : "Export the selected participant’s filtered range data, including the new heart rate, respiratory, and blood oxygen fields.")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundColor(.white.opacity(0.65))
 
