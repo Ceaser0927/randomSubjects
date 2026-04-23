@@ -68,6 +68,7 @@
 		0D1D4A6A2F4EB3B9001EF527 /* BurnoutScoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BurnoutScoreView.swift; sourceTree = "<group>"; };
 		0D1D4A6F2F4EC5FF001EF527 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
 		0D1D4A712F4ECB4C001EF527 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0D6513872F97333500D84931 /* iSteps copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "iSteps copy-Info.plist"; path = "/Users/kavsarahmat/Desktop/healthDemo/burnoutHealthApp/randomSubjects/iSteps copy-Info.plist"; sourceTree = "<absolute>"; };
 		0D73D9F52F459B1A00D69775 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		0D781BBD2F6107A200835BA8 /* ProfileOnboardingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileOnboardingModule.swift; sourceTree = "<group>"; };
 		0DC5DC5C2F3C606100A86516 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -261,6 +262,7 @@
 			children = (
 				1AFFA7F92A5439A700120F81 /* iSteps */,
 				1A9BB7FD2A5AB5E200C6074A /* Frameworks */,
+				0D6513872F97333500D84931 /* iSteps copy-Info.plist */,
 				1AFFA7F82A5439A700120F81 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -566,6 +568,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iSteps/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BRAVE;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app requires access to your step count data to provide accurate fitness tracking.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app needs write access to your step count data to update your fitness goals and track your progress accurately.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -604,6 +607,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iSteps/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BRAVE;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app requires access to your step count data to provide accurate fitness tracking.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app needs write access to your step count data to update your fitness goals and track your progress accurately.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

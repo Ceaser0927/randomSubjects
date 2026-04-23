@@ -15,7 +15,6 @@ struct ParticipantItem: Identifiable {
 }
 
 struct DailyRow: Identifiable {
-    // Use dateId as id
     let id: String // "yyyy-MM-dd"
 
     let dateId: String
@@ -24,6 +23,15 @@ struct DailyRow: Identifiable {
     let hrvSDNNms: Double?
     let restingHRbpm: Double?
     let activeEnergyKcal: Double?
+
+    let heartRateAvg: Double?
+    let heartRateMin: Double?
+    let heartRateMax: Double?
+    let bloodOxygenAvg: Double?
+
+    let hasHeartRate: Bool?
+    let hasOxygen: Bool?
+
     let validDay: Bool?
     let syncedAt: Date?
 
@@ -35,6 +43,15 @@ struct DailyRow: Identifiable {
         let hrv = data["hrvSDNN_ms"] as? Double
         let rhr = data["restingHR_bpm"] as? Double
         let energy = data["activeEnergyKcal"] as? Double
+
+        let heartRateAvg = data["heartRateAvg"] as? Double
+        let heartRateMin = data["heartRateMin"] as? Double
+        let heartRateMax = data["heartRateMax"] as? Double
+        let bloodOxygenAvg = data["bloodOxygenAvg"] as? Double
+
+        let hasHeartRate = data["hasHeartRate"] as? Bool
+        let hasOxygen = data["hasOxygen"] as? Bool
+
         let validDay = data["validDay"] as? Bool
 
         let syncedAt: Date?
@@ -52,8 +69,67 @@ struct DailyRow: Identifiable {
             hrvSDNNms: hrv,
             restingHRbpm: rhr,
             activeEnergyKcal: energy,
+            heartRateAvg: heartRateAvg,
+            heartRateMin: heartRateMin,
+            heartRateMax: heartRateMax,
+            bloodOxygenAvg: bloodOxygenAvg,
+            hasHeartRate: hasHeartRate,
+            hasOxygen: hasOxygen,
             validDay: validDay,
             syncedAt: syncedAt
+        )
+    }
+}
+
+struct SleepNightlyRow: Identifiable {
+    let id: String
+    let sleepKey: String
+    let anchorDateLocal: String
+    let respiratoryRateAvg: Double?
+    let asleepMin: Int?
+    let awakeMin: Int?
+    let coreMin: Int?
+    let deepMin: Int?
+    let remMin: Int?
+    let hasStages: Bool?
+    let startTimeUTC: Double?
+    let endTimeUTC: Double?
+    let createdAt: Date?
+
+    static func from(_ data: [String: Any], fallbackId: String) -> SleepNightlyRow {
+        let sleepKey = (data["sleepKey"] as? String) ?? fallbackId
+        let anchorDateLocal = (data["anchorDateLocal"] as? String) ?? ""
+        let respiratoryRateAvg = data["respiratoryRateAvg"] as? Double
+        let asleepMin = data["asleepMin"] as? Int
+        let awakeMin = data["awakeMin"] as? Int
+        let coreMin = data["coreMin"] as? Int
+        let deepMin = data["deepMin"] as? Int
+        let remMin = data["remMin"] as? Int
+        let hasStages = data["hasStages"] as? Bool
+        let startTimeUTC = data["startTimeUTC"] as? Double
+        let endTimeUTC = data["endTimeUTC"] as? Double
+
+        let createdAt: Date?
+        if let ts = data["createdAt"] as? Timestamp {
+            createdAt = ts.dateValue()
+        } else {
+            createdAt = nil
+        }
+
+        return SleepNightlyRow(
+            id: sleepKey,
+            sleepKey: sleepKey,
+            anchorDateLocal: anchorDateLocal,
+            respiratoryRateAvg: respiratoryRateAvg,
+            asleepMin: asleepMin,
+            awakeMin: awakeMin,
+            coreMin: coreMin,
+            deepMin: deepMin,
+            remMin: remMin,
+            hasStages: hasStages,
+            startTimeUTC: startTimeUTC,
+            endTimeUTC: endTimeUTC,
+            createdAt: createdAt
         )
     }
 }
@@ -65,6 +141,9 @@ enum AdminMetric: String, CaseIterable, Identifiable {
     case sleep = "Sleep"
     case hrv = "HRV SDNN"
     case rhr = "Resting HR"
+    case heartRate = "Heart Rate"
+    case respiratory = "Respiratory"
+    case oxygen = "Blood Oxygen"
     case energy = "Active Energy"
     case all = "All (Normalized)"
 
@@ -76,6 +155,9 @@ enum AdminMetric: String, CaseIterable, Identifiable {
         case .sleep: return "bed.double"
         case .hrv: return "waveform.path.ecg"
         case .rhr: return "heart"
+        case .heartRate: return "heart.text.square"
+        case .respiratory: return "lungs.fill"
+        case .oxygen: return "drop.fill"
         case .energy: return "flame"
         case .all: return "chart.xyaxis.line"
         }
@@ -88,7 +170,6 @@ struct AdminDashboardView: View {
 
     @EnvironmentObject private var session: EmailAuthenticationController
 
-    // Same look & feel as pilot
     private var pilotBackground: some View {
         LinearGradient(
             colors: [
@@ -104,19 +185,26 @@ struct AdminDashboardView: View {
     @State private var participants: [ParticipantItem] = []
     @State private var selectedUID: String? = nil
 
-    // Use plain Int to avoid Picker tag mismatch issues.
     @State private var rangeDays: Int = 14
 
+    // Raw loaded data
+    @State private var allDailyRows: [DailyRow] = []
+    @State private var allSleepRows: [SleepNightlyRow] = []
+
+    // Filtered data for current range
     @State private var dailyRows: [DailyRow] = []
+    @State private var sleepRows: [SleepNightlyRow] = []
+
     @State private var isLoading: Bool = false
     @State private var errorText: String? = nil
 
-    // Trend controls
     @State private var selectedMetric: AdminMetric = .steps
 
-    // Export
     @State private var exportURL: URL? = nil
     @State private var showShare: Bool = false
+    @State private var researchTapCount: Int = 0
+
+    @AppStorage("irb_mode") private var isIRBMode = false
 
     var body: some View {
         NavigationView {
@@ -133,7 +221,7 @@ struct AdminDashboardView: View {
                             glassCard(title: "Loading", trailingIcon: "hourglass") {
                                 HStack(spacing: 10) {
                                     ProgressView()
-                                    Text("Fetching participants / daily data…")
+                                    Text("Fetching participants / study data…")
                                         .font(.system(.subheadline, design: .rounded))
                                         .foregroundColor(.white.opacity(0.8))
                                 }
@@ -148,7 +236,7 @@ struct AdminDashboardView: View {
                             }
                         }
 
-                        if let latest = dailyRows.sorted(by: { $0.dateId > $1.dateId }).first {
+                        if let latest = latestDailyRow {
                             latestSummaryCard(latest)
                         }
 
@@ -182,9 +270,43 @@ struct AdminDashboardView: View {
             }
             .onAppear { reloadAll() }
             .sheet(isPresented: $showShare) {
-                if let exportURL { ShareSheet(activityItems: [exportURL]) }
+                if let exportURL {
+                    ShareSheet(activityItems: [exportURL])
+                }
             }
         }
+    }
+
+    // MARK: - Derived data
+
+    private var latestDailyRow: DailyRow? {
+        dailyRows.sorted(by: { $0.dateId > $1.dateId }).first
+    }
+
+    private var rangeCutoffDate: Date? {
+        guard let latest = allDailyRows.compactMap({ Self.parseDateId($0.dateId) }).max() else {
+            return nil
+        }
+        return Calendar.current.date(byAdding: .day, value: -(rangeDays - 1), to: latest)
+    }
+
+    private func respiratoryFor(dateId: String) -> Double? {
+        sleepRows.first(where: { $0.anchorDateLocal == dateId })?.respiratoryRateAvg
+    }
+
+    private func latestRespiratoryForSummary(latestDateId: String) -> Double? {
+        if let sameDay = respiratoryFor(dateId: latestDateId) {
+            return sameDay
+        }
+        return sleepRows
+            .sorted(by: { $0.anchorDateLocal > $1.anchorDateLocal })
+            .first?.respiratoryRateAvg
+    }
+    private func heartRateSummaryText(_ row: DailyRow) -> String {
+        let avg = row.heartRateAvg.map { String(format: "%.1f", $0) } ?? "—"
+        let min = row.heartRateMin.map { String(format: "%.0f", $0) } ?? "—"
+        let max = row.heartRateMax.map { String(format: "%.0f", $0) } ?? "—"
+        return "\(avg) / \(min) / \(max)"
     }
 
     // MARK: - Cards
@@ -203,7 +325,7 @@ struct AdminDashboardView: View {
                     Text("Admin Dashboard")
                         .font(.system(.headline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Select participant • Review trends • Export CSV")
+                    Text(isIRBMode ? "IRB Demo Mode • Review simulated study data" : "Select participant • Review trends • Export study data")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundColor(.white.opacity(0.65))
                 }
@@ -217,6 +339,14 @@ struct AdminDashboardView: View {
                     .padding(.vertical, 6)
                     .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        researchTapCount += 1
+                        if researchTapCount >= 3 {
+                            isIRBMode.toggle()
+                            researchTapCount = 0
+                        }
+                    }
             }
 
             Divider().overlay(Color.white.opacity(0.12))
@@ -226,7 +356,7 @@ struct AdminDashboardView: View {
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
-                Text(Auth.auth().currentUser?.email ?? "Unknown")
+                Text(isIRBMode ? "demo_user@test.com" : (Auth.auth().currentUser?.email ?? "Unknown"))
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -283,7 +413,7 @@ struct AdminDashboardView: View {
                             ForEach(participants) { p in
                                 Button {
                                     selectedUID = p.id
-                                    reloadDaily()
+                                    reloadParticipantData()
                                 } label: {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(participantLabel(for: p))
@@ -304,7 +434,9 @@ struct AdminDashboardView: View {
                         }
                     }
 
-                    if let uid = selectedUID, let p = participants.first(where: { $0.id == uid }), p.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if let uid = selectedUID,
+                       let p = participants.first(where: { $0.id == uid }),
+                       p.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Email is unavailable for this participant until they log in again and refresh their admin index. Using UID for selection now.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
@@ -326,18 +458,16 @@ struct AdminDashboardView: View {
                     }
                     .pickerStyle(.menu)
                     .onChange(of: rangeDays) { _ in
-                        reloadDaily()
+                        applyRangeFilter()
                     }
                 }
 
-                // Showing loaded count helps clarify why the UI may look unchanged if the user has
-                // fewer docs than the selected range.
                 HStack {
                     Text("Loaded")
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text("\(dailyRows.count) / \(rangeDays) days")
+                    Text(isIRBMode ? "0 daily • 0 nightly" : "\(dailyRows.count) daily • \(sleepRows.count) nightly")
                         .font(.system(.caption, design: .rounded).weight(.bold))
                         .foregroundColor(.white.opacity(0.85))
                         .padding(.horizontal, 10)
@@ -350,12 +480,15 @@ struct AdminDashboardView: View {
                     Button {
                         reloadAll()
                     } label: {
-                        HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("Refresh") }
-                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.white.opacity(0.08))
-                            .clipShape(Capsule())
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Refresh")
+                        }
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.08))
+                        .clipShape(Capsule())
                     }
                     .foregroundColor(.white)
 
@@ -389,14 +522,39 @@ struct AdminDashboardView: View {
     }
 
     private func latestSummaryCard(_ latest: DailyRow) -> some View {
-        glassCard(title: "Latest Summary", trailingIcon: "doc.plaintext") {
+        let respiratory = latestRespiratoryForSummary(latestDateId: latest.dateId)
+        let displayDate = isIRBMode ? "Demo Data" : latest.dateId
+        let displaySteps = isIRBMode ? "0" : (latest.steps.map(String.init) ?? "—")
+        let displaySleep = isIRBMode ? "0" : (latest.sleepHours.map { String(format: "%.2f", $0) } ?? "—")
+        let displayHRV = isIRBMode ? "0" : (latest.hrvSDNNms.map { String(format: "%.2f", $0) } ?? "—")
+        let displayRHR = isIRBMode ? "0" : (latest.restingHRbpm.map { String(format: "%.0f", $0) } ?? "—")
+        let displayHeartRate = isIRBMode ? "0 / 0 / 0" : heartRateSummaryText(latest)
+        let displayRespiratory = isIRBMode ? "0" : (respiratory.map { String(format: "%.2f", $0) } ?? "—")
+        let displayOxygen = isIRBMode ? "0" : (latest.bloodOxygenAvg.map { String(format: "%.1f", $0) } ?? "—")
+        let displayEnergy = isIRBMode ? "0" : (latest.activeEnergyKcal.map { String(format: "%.1f", $0) } ?? "—")
+        let displayValidDay = isIRBMode ? "false" : ((latest.validDay ?? false) ? "true" : "false")
+        let displayValidDayColor = isIRBMode ? Color.orange.opacity(0.95) : ((latest.validDay ?? false) ? .green.opacity(0.9) : .orange.opacity(0.95))
+        let displaySyncedAt = isIRBMode ? "Disabled" : (latest.syncedAt.map(formatDateTime) ?? "—")
+
+        return glassCard(title: "Latest Summary", trailingIcon: "doc.plaintext") {
             VStack(spacing: 10) {
-                statusRow(title: "Date", value: latest.dateId, valueColor: .white.opacity(0.9), icon: "calendar")
-                statusRow(title: "Steps", value: latest.steps.map(String.init) ?? "—", valueColor: .white.opacity(0.9), icon: "figure.walk")
-                statusRow(title: "Sleep (h)", value: latest.sleepHours.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "bed.double")
-                statusRow(title: "HRV SDNN (ms)", value: latest.hrvSDNNms.map { String(format: "%.2f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "waveform.path.ecg")
-                statusRow(title: "Resting HR (bpm)", value: latest.restingHRbpm.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "heart")
-                statusRow(title: "Active Energy (kcal)", value: latest.activeEnergyKcal.map { String(format: "%.1f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "flame")
+                statusRow(title: "Date", value: displayDate, valueColor: .white.opacity(0.9), icon: "calendar")
+                statusRow(title: "Steps", value: displaySteps, valueColor: .white.opacity(0.9), icon: "figure.walk")
+                statusRow(title: "Sleep (h)", value: displaySleep, valueColor: .white.opacity(0.9), icon: "bed.double")
+                statusRow(title: "HRV SDNN (ms)", value: displayHRV, valueColor: .white.opacity(0.9), icon: "waveform.path.ecg")
+                statusRow(title: "Resting HR (bpm)", value: displayRHR, valueColor: .white.opacity(0.9), icon: "heart")
+//                statusRow(title: "Heart Rate Avg (bpm)", value: latest.heartRateAvg.map { String(format: "%.1f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "heart.text.square")
+//                statusRow(title: "Heart Rate Min (bpm)", value: latest.heartRateMin.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "arrow.down.heart")
+//                statusRow(title: "Heart Rate Max (bpm)", value: latest.heartRateMax.map { String(format: "%.0f", $0) } ?? "—", valueColor: .white.opacity(0.9), icon: "arrow.up.heart")
+                statusRow(
+                    title: "Heart Rate (avg / min / max)",
+                    value: displayHeartRate,
+                    valueColor: .white.opacity(0.9),
+                    icon: "heart.text.square"
+                )
+                statusRow(title: "Respiratory Rate", value: displayRespiratory, valueColor: .white.opacity(0.9), icon: "lungs.fill")
+                statusRow(title: "Blood Oxygen (%)", value: displayOxygen, valueColor: .white.opacity(0.9), icon: "drop.fill")
+                statusRow(title: "Active Energy (kcal)", value: displayEnergy, valueColor: .white.opacity(0.9), icon: "flame")
 
                 Divider().overlay(.white.opacity(0.12))
 
@@ -405,9 +563,9 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text((latest.validDay ?? false) ? "true" : "false")
+                    Text(displayValidDay)
                         .font(.system(.subheadline, design: .rounded).weight(.bold))
-                        .foregroundColor((latest.validDay ?? false) ? .green.opacity(0.9) : .orange.opacity(0.95))
+                        .foregroundColor(displayValidDayColor)
                 }
 
                 HStack {
@@ -415,7 +573,7 @@ struct AdminDashboardView: View {
                         .font(.system(.subheadline, design: .rounded).weight(.semibold))
                         .foregroundColor(.white)
                     Spacer()
-                    Text(latest.syncedAt.map(formatDateTime) ?? "—")
+                    Text(displaySyncedAt)
                         .font(.system(.footnote, design: .rounded))
                         .foregroundColor(.white.opacity(0.75))
                 }
@@ -423,14 +581,14 @@ struct AdminDashboardView: View {
         }
     }
 
-    // MARK: - Trends (single chart + dropdown)
+    // MARK: - Trends
 
     private var trendsCard: some View {
         glassCard(title: "Trends", trailingIcon: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 12) {
 
-                if dailyRows.isEmpty {
-                    Text("No daily data yet for selected participant.")
+                if dailyRows.isEmpty && sleepRows.isEmpty {
+                    Text("No study data yet for selected participant.")
                         .font(.system(.footnote, design: .rounded))
                         .foregroundColor(.white.opacity(0.65))
                 } else {
@@ -481,7 +639,7 @@ struct AdminDashboardView: View {
     }
 
     private func trendsChartView() -> some View {
-        let points = buildTrendPoints(metric: selectedMetric, rows: dailyRows)
+        let points = buildTrendPoints(metric: selectedMetric)
 
         return Chart(points.sorted(by: { $0.date < $1.date })) { p in
             LineMark(
@@ -501,42 +659,79 @@ struct AdminDashboardView: View {
         .chartLegend(.visible)
     }
 
-    private func buildTrendPoints(metric: AdminMetric, rows: [DailyRow]) -> [ChartPoint] {
-        let sorted = rows.sorted(by: { $0.dateId < $1.dateId })
+    private func buildTrendPoints(metric: AdminMetric) -> [ChartPoint] {
+        let dailySorted = dailyRows.sorted(by: { $0.dateId < $1.dateId })
+        let sleepSorted = sleepRows.sorted(by: { $0.anchorDateLocal < $1.anchorDateLocal })
+
+        if isIRBMode {
+            switch metric {
+            case .respiratory:
+                let respiratoryDates = sleepSorted.map(\.anchorDateLocal).filter { !$0.isEmpty }
+                return respiratoryDates.isEmpty
+                    ? dailySorted.map { ChartPoint(dateId: $0.dateId, value: 0, series: "Respiratory") }
+                    : respiratoryDates.map { ChartPoint(dateId: $0, value: 0, series: "Respiratory") }
+            case .all:
+                let seriesNames = ["Steps", "Sleep", "HRV", "RHR", "Heart Rate", "Respiratory", "Oxygen", "Energy"]
+                let dates = dailySorted.map(\.dateId)
+                return dates.flatMap { dateId in
+                    seriesNames.map { ChartPoint(dateId: dateId, value: 0, series: $0) }
+                }
+            default:
+                let seriesName = metric.rawValue
+                return dailySorted.map { ChartPoint(dateId: $0.dateId, value: 0, series: seriesName) }
+            }
+        }
 
         switch metric {
         case .steps:
-            return sorted.compactMap { r in
+            return dailySorted.compactMap { r in
                 guard let v = r.steps else { return nil }
                 return ChartPoint(dateId: r.dateId, value: Double(v), series: "Steps")
             }
 
         case .sleep:
-            return sorted.compactMap { r in
+            return dailySorted.compactMap { r in
                 guard let v = r.sleepHours else { return nil }
                 return ChartPoint(dateId: r.dateId, value: v, series: "Sleep Hours")
             }
 
         case .hrv:
-            return sorted.compactMap { r in
+            return dailySorted.compactMap { r in
                 guard let v = r.hrvSDNNms else { return nil }
                 return ChartPoint(dateId: r.dateId, value: v, series: "HRV SDNN")
             }
 
         case .rhr:
-            return sorted.compactMap { r in
+            return dailySorted.compactMap { r in
                 guard let v = r.restingHRbpm else { return nil }
                 return ChartPoint(dateId: r.dateId, value: v, series: "Resting HR")
             }
 
+        case .heartRate:
+            return dailySorted.compactMap { r in
+                guard let v = r.heartRateAvg else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "Heart Rate")
+            }
+
+        case .respiratory:
+            return sleepSorted.compactMap { r in
+                guard !r.anchorDateLocal.isEmpty, let v = r.respiratoryRateAvg else { return nil }
+                return ChartPoint(dateId: r.anchorDateLocal, value: v, series: "Respiratory")
+            }
+
+        case .oxygen:
+            return dailySorted.compactMap { r in
+                guard let v = r.bloodOxygenAvg else { return nil }
+                return ChartPoint(dateId: r.dateId, value: v, series: "Blood Oxygen")
+            }
+
         case .energy:
-            return sorted.compactMap { r in
+            return dailySorted.compactMap { r in
                 guard let v = r.activeEnergyKcal else { return nil }
                 return ChartPoint(dateId: r.dateId, value: v, series: "Active Energy")
             }
 
         case .all:
-            // Normalize each metric independently to 0–1 (min-max).
             func normalize(_ series: [(String, Double)]) -> [(String, Double)] {
                 guard let minV = series.map(\.1).min(),
                       let maxV = series.map(\.1).max() else { return [] }
@@ -546,60 +741,75 @@ struct AdminDashboardView: View {
                 return series.map { ($0.0, ($0.1 - minV) / (maxV - minV)) }
             }
 
-            let stepsRaw: [(String, Double)] = sorted.compactMap { r in
+            let stepsRaw: [(String, Double)] = dailySorted.compactMap { r in
                 guard let v = r.steps else { return nil }
                 return (r.dateId, Double(v))
             }
-            let sleepRaw: [(String, Double)] = sorted.compactMap { r in
+
+            let sleepRaw: [(String, Double)] = dailySorted.compactMap { r in
                 guard let v = r.sleepHours else { return nil }
                 return (r.dateId, v)
             }
-            let hrvRaw: [(String, Double)] = sorted.compactMap { r in
+
+            let hrvRaw: [(String, Double)] = dailySorted.compactMap { r in
                 guard let v = r.hrvSDNNms else { return nil }
                 return (r.dateId, v)
             }
-            let rhrRaw: [(String, Double)] = sorted.compactMap { r in
+
+            let rhrRaw: [(String, Double)] = dailySorted.compactMap { r in
                 guard let v = r.restingHRbpm else { return nil }
                 return (r.dateId, v)
             }
-            let energyRaw: [(String, Double)] = sorted.compactMap { r in
+
+            let hrRaw: [(String, Double)] = dailySorted.compactMap { r in
+                guard let v = r.heartRateAvg else { return nil }
+                return (r.dateId, v)
+            }
+
+            let oxygenRaw: [(String, Double)] = dailySorted.compactMap { r in
+                guard let v = r.bloodOxygenAvg else { return nil }
+                return (r.dateId, v)
+            }
+
+            let energyRaw: [(String, Double)] = dailySorted.compactMap { r in
                 guard let v = r.activeEnergyKcal else { return nil }
                 return (r.dateId, v)
+            }
+
+            let respiratoryRaw: [(String, Double)] = sleepSorted.compactMap { r in
+                guard !r.anchorDateLocal.isEmpty, let v = r.respiratoryRateAvg else { return nil }
+                return (r.anchorDateLocal, v)
             }
 
             let steps = normalize(stepsRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Steps") }
             let sleep = normalize(sleepRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Sleep") }
             let hrv = normalize(hrvRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "HRV") }
             let rhr = normalize(rhrRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "RHR") }
+            let hr = normalize(hrRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Heart Rate") }
+            let respiratory = normalize(respiratoryRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Respiratory") }
+            let oxygen = normalize(oxygenRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Oxygen") }
             let energy = normalize(energyRaw).map { ChartPoint(dateId: $0.0, value: $0.1, series: "Energy") }
 
-            return steps + sleep + hrv + rhr + energy
+            return steps + sleep + hrv + rhr + hr + respiratory + oxygen + energy
         }
     }
 
-    // MARK: - Export CSV
+    // MARK: - Export
 
     private var exportCard: some View {
         glassCard(title: "Export", trailingIcon: "square.and.arrow.up") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Export selected participant’s daily rows as CSV (Excel-compatible).")
+                Text(isIRBMode ? "Export demo-view data for IRB review screens." : "Export the selected participant’s filtered range data, including the new heart rate, respiratory, and blood oxygen fields.")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundColor(.white.opacity(0.65))
 
-//                Button {
-//                    exportCSV()
-//                } label: {
-//                    HStack {
-//                        Image(systemName: "doc.badge.plus")
-//                        Text("Download CSV")
-//                    }
-//                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-//                    .padding(.horizontal, 14)
-//                    .padding(.vertical, 8)
-//                    .background(Color.white.opacity(0.08))
-//                    .clipShape(Capsule())
-//                }
                 Menu {
+                    Button {
+                        exportCSV()
+                    } label: {
+                        Label("Download CSV", systemImage: "doc.plaintext")
+                    }
+
                     Button {
                         exportJSONFull()
                     } label: {
@@ -611,10 +821,6 @@ struct AdminDashboardView: View {
                     } label: {
                         Label("Download Excel (.xlsx)", systemImage: "tablecells")
                     }
-
-                    // 可选：保留 CSV 也行
-                    // Button { exportCSV() } label: { Label("Download CSV", systemImage: "doc.plaintext") }
-
                 } label: {
                     HStack {
                         Image(systemName: "square.and.arrow.down")
@@ -627,9 +833,7 @@ struct AdminDashboardView: View {
                     .clipShape(Capsule())
                 }
                 .foregroundColor(.white)
-                .disabled(dailyRows.isEmpty || selectedUID == nil)
-                .foregroundColor(.white)
-                .disabled(dailyRows.isEmpty || selectedUID == nil)
+                .disabled((dailyRows.isEmpty && sleepRows.isEmpty) || selectedUID == nil)
 
                 if let exportURL {
                     Text("Ready: \(exportURL.lastPathComponent)")
@@ -661,10 +865,13 @@ struct AdminDashboardView: View {
         errorText = nil
         exportURL = nil
         dailyRows = []
-        loadParticipantsThenDaily()
+        sleepRows = []
+        allDailyRows = []
+        allSleepRows = []
+        loadParticipantsThenData()
     }
 
-    private func loadParticipantsThenDaily() {
+    private func loadParticipantsThenData() {
         isLoading = true
         let db = Firestore.firestore()
         let group = DispatchGroup()
@@ -749,11 +956,11 @@ struct AdminDashboardView: View {
                 self.selectedUID = list.first?.id
             }
 
-            self.reloadDaily()
+            self.reloadParticipantData()
         }
     }
 
-    private func reloadDaily() {
+    private func reloadParticipantData() {
         guard let uid = selectedUID else {
             isLoading = false
             return
@@ -763,25 +970,71 @@ struct AdminDashboardView: View {
         errorText = nil
         exportURL = nil
         dailyRows = []
+        sleepRows = []
+        allDailyRows = []
+        allSleepRows = []
 
         let db = Firestore.firestore()
+        let participantRef = db.collection("participants").document(uid)
+        let group = DispatchGroup()
 
-        db.collection("participants")
-            .document(uid)
-            .collection("daily")
-            .order(by: "date", descending: true)
-            .limit(to: rangeDays)
+        var loadError: String?
+
+        group.enter()
+        participantRef.collection("daily")
+            .order(by: "date", descending: false)
             .getDocuments { snap, err in
-                isLoading = false
                 if let err {
-                    errorText = "Failed to load daily data: \(err.localizedDescription)"
-                    return
+                    loadError = "Failed to load daily data: \(err.localizedDescription)"
+                } else {
+                    self.allDailyRows = (snap?.documents ?? []).map { d in
+                        DailyRow.from(d.data(), fallbackId: d.documentID)
+                    }
                 }
-
-                self.dailyRows = (snap?.documents ?? []).map { d in
-                    DailyRow.from(d.data(), fallbackId: d.documentID)
-                }
+                group.leave()
             }
+
+        group.enter()
+        participantRef.collection("sleep_nightly")
+            .getDocuments { snap, err in
+                if let err {
+                    loadError = loadError ?? "Failed to load sleep_nightly data: \(err.localizedDescription)"
+                } else {
+                    self.allSleepRows = (snap?.documents ?? []).map { d in
+                        SleepNightlyRow.from(d.data(), fallbackId: d.documentID)
+                    }
+                }
+                group.leave()
+            }
+
+        group.notify(queue: .main) {
+            self.isLoading = false
+            if let loadError {
+                self.errorText = loadError
+                return
+            }
+            self.applyRangeFilter()
+        }
+    }
+
+    private func applyRangeFilter() {
+        exportURL = nil
+
+        guard let cutoff = rangeCutoffDate else {
+            dailyRows = allDailyRows
+            sleepRows = allSleepRows
+            return
+        }
+
+        dailyRows = allDailyRows.filter { row in
+            guard let date = Self.parseDateId(row.dateId) else { return false }
+            return date >= cutoff
+        }
+
+        sleepRows = allSleepRows.filter { row in
+            guard let date = Self.parseDateId(row.anchorDateLocal) else { return false }
+            return date >= cutoff
+        }
     }
 
     private func exportCSV() {
@@ -790,18 +1043,23 @@ struct AdminDashboardView: View {
 
         let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
 
-        var csv = "date,steps,sleepHours,hrvSDNN_ms,restingHR_bpm,activeEnergyKcal,validDay,syncedAt\n"
+        var csv = "date,steps,sleepHours,hrvSDNN_ms,restingHR_bpm,heartRateAvg,heartRateMin,heartRateMax,bloodOxygenAvg,respiratoryRateAvg,activeEnergyKcal,validDay,syncedAt\n"
 
         for r in rows {
             let steps = r.steps.map(String.init) ?? ""
             let sleep = r.sleepHours.map { String(format: "%.4f", $0) } ?? ""
             let hrv = r.hrvSDNNms.map { String(format: "%.6f", $0) } ?? ""
             let rhr = r.restingHRbpm.map { String(format: "%.2f", $0) } ?? ""
+            let hrAvg = r.heartRateAvg.map { String(format: "%.6f", $0) } ?? ""
+            let hrMin = r.heartRateMin.map { String(format: "%.6f", $0) } ?? ""
+            let hrMax = r.heartRateMax.map { String(format: "%.6f", $0) } ?? ""
+            let oxygen = r.bloodOxygenAvg.map { String(format: "%.6f", $0) } ?? ""
+            let respiratory = respiratoryFor(dateId: r.dateId).map { String(format: "%.6f", $0) } ?? ""
             let energy = r.activeEnergyKcal.map { String(format: "%.6f", $0) } ?? ""
             let valid = r.validDay.map { $0 ? "true" : "false" } ?? ""
             let synced = r.syncedAt.map(iso8601) ?? ""
 
-            csv += "\(r.dateId),\(steps),\(sleep),\(hrv),\(rhr),\(energy),\(valid),\(synced)\n"
+            csv += "\(r.dateId),\(steps),\(sleep),\(hrv),\(rhr),\(hrAvg),\(hrMin),\(hrMax),\(oxygen),\(respiratory),\(energy),\(valid),\(synced)\n"
         }
 
         let safeName = display
@@ -821,7 +1079,7 @@ struct AdminDashboardView: View {
         }
     }
 
-    // MARK: - UI helpers (same style)
+    // MARK: - UI helpers
 
     private func glassCard<Content: View>(
         title: String,
@@ -898,6 +1156,7 @@ struct AdminDashboardView: View {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: d)
     }
+
     private func exportJSONFull() {
         guard let uid = selectedUID else { return }
         let display = participants.first(where: { $0.id == uid }).map(participantLabel(for:)) ?? uid
@@ -905,116 +1164,74 @@ struct AdminDashboardView: View {
         isLoading = true
         errorText = nil
 
-        let db = Firestore.firestore()
-        let participantRef = db.collection("participants").document(uid)
-
-        participantRef.getDocument { pSnap, pErr in
-            if let pErr {
-                isLoading = false
-                errorText = "Load participant failed: \(pErr.localizedDescription)"
-                return
-            }
-
-                    let participantData = normalizeTimestamps(pSnap?.data() ?? [:])
-
-            let group = DispatchGroup()
-
-            var dailyDocs: [[String: Any]] = []
-            var sleepDocs: [[String: Any]] = []
-
-            // ---- daily (不 limit，导出完整) ----
-            group.enter()
-            participantRef.collection("daily")
-                .order(by: "date", descending: false)
-                .getDocuments { snap, err in
-                    defer { group.leave() }
-                    if let err { errorText = "Load daily failed: \(err.localizedDescription)"; return }
-
-                    dailyDocs = (snap?.documents ?? []).map { d in
-                        var obj = d.data()
-                        obj["_id"] = d.documentID
-                        // Timestamp -> ISO8601（可选）
-                        obj = normalizeTimestamps(obj)
-                        return obj
-                    }
-                }
-
-            // ---- sleep_nightly (导出完整) ----
-            group.enter()
-            participantRef.collection("sleep_nightly")
-                .getDocuments { snap, err in
-                    defer { group.leave() }
-                    if let err {
-                        errorText = "Load sleep_nightly failed: \(err.localizedDescription)"
-                        return
-                    }
-
-                    sleepDocs = (snap?.documents ?? []).map { d in
-                        var obj = d.data()
-                        obj["_id"] = d.documentID
-                        obj = normalizeTimestamps(obj)
-                        return obj
-                    }
-                }
-
-            group.notify(queue: .main) {
-                isLoading = false
-                if let errorText, !errorText.isEmpty { return }
-
-                let payload: [String: Any] = [
-                    "uid": uid,
-                    "exportedAt": iso8601(Date()),
-                    "participant": participantData,
-                    "daily": dailyDocs,
-                    "sleep_nightly": sleepDocs
+        let payload: [String: Any] = [
+            "uid": uid,
+            "exportedAt": iso8601(Date()),
+            "rangeDays": rangeDays,
+            "daily": dailyRows.sorted(by: { $0.dateId < $1.dateId }).map { row in
+                [
+                    "date": row.dateId,
+                    "steps": row.steps as Any,
+                    "sleepHours": row.sleepHours as Any,
+                    "hrvSDNN_ms": row.hrvSDNNms as Any,
+                    "restingHR_bpm": row.restingHRbpm as Any,
+                    "heartRateAvg": row.heartRateAvg as Any,
+                    "heartRateMin": row.heartRateMin as Any,
+                    "heartRateMax": row.heartRateMax as Any,
+                    "bloodOxygenAvg": row.bloodOxygenAvg as Any,
+                    "hasHeartRate": row.hasHeartRate as Any,
+                    "hasOxygen": row.hasOxygen as Any,
+                    "activeEnergyKcal": row.activeEnergyKcal as Any,
+                    "validDay": row.validDay as Any,
+                    "syncedAt": row.syncedAt.map(iso8601) as Any
                 ]
-
-                do {
-                    let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
-
-                    let safeName = display
-                        .replacingOccurrences(of: "@", with: "_")
-                        .replacingOccurrences(of: ".", with: "_")
-                        .replacingOccurrences(of: " ", with: "_")
-
-                    let fileName = "pilot_export_full_\(safeName).json"
-                    let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-                    try data.write(to: url, options: .atomic)
-                    exportURL = url
-                    showShare = true
-                } catch {
-                    errorText = "Export JSON failed: \(error.localizedDescription)"
-                }
+            },
+            "sleep_nightly": sleepRows.sorted(by: { $0.anchorDateLocal < $1.anchorDateLocal }).map { row in
+                [
+                    "sleepKey": row.sleepKey,
+                    "anchorDateLocal": row.anchorDateLocal,
+                    "respiratoryRateAvg": row.respiratoryRateAvg as Any,
+                    "asleepMin": row.asleepMin as Any,
+                    "awakeMin": row.awakeMin as Any,
+                    "coreMin": row.coreMin as Any,
+                    "deepMin": row.deepMin as Any,
+                    "remMin": row.remMin as Any,
+                    "hasStages": row.hasStages as Any,
+                    "startTimeUTC": row.startTimeUTC as Any,
+                    "endTimeUTC": row.endTimeUTC as Any,
+                    "createdAt": row.createdAt.map(iso8601) as Any
+                ]
             }
+        ]
+
+        do {
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+
+            let safeName = display
+                .replacingOccurrences(of: "@", with: "_")
+                .replacingOccurrences(of: ".", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+
+            let fileName = "pilot_export_full_\(safeName)_\(rangeDays)d.json"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+            try data.write(to: url, options: .atomic)
+            exportURL = url
+            showShare = true
+            isLoading = false
+        } catch {
+            isLoading = false
+            errorText = "Export JSON failed: \(error.localizedDescription)"
         }
     }
 
-    private func normalizeTimestamps(_ dict: [String: Any]) -> [String: Any] {
-        var out: [String: Any] = [:]
-        for (k, v) in dict {
-            if let ts = v as? Timestamp {
-                out[k] = iso8601(ts.dateValue())
-            } else if let sub = v as? [String: Any] {
-                out[k] = normalizeTimestamps(sub)
-            } else if let arr = v as? [Any] {
-                out[k] = arr.map { item -> Any in
-                    if let ts = item as? Timestamp { return iso8601(ts.dateValue()) }
-                    if let sub = item as? [String: Any] { return normalizeTimestamps(sub) }
-                    return item
-                }
-            } else {
-                out[k] = v
-            }
-        }
-        return out
-    }
     private func exportXLSX() {
         guard let uid = selectedUID else { return }
         let display = participants.first(where: { $0.id == uid }).map(participantLabel(for:)) ?? uid
-        let rows = dailyRows.sorted(by: { $0.dateId < $1.dateId })
 
-        // 文件名
+        let daily = dailyRows.sorted(by: { $0.dateId < $1.dateId })
+        let nightly = sleepRows.sorted(by: { $0.anchorDateLocal < $1.anchorDateLocal })
+
         let safeName = display
             .replacingOccurrences(of: "@", with: "_")
             .replacingOccurrences(of: ".", with: "_")
@@ -1022,91 +1239,107 @@ struct AdminDashboardView: View {
 
         let fileName = "pilot_export_\(safeName)_\(rangeDays)d.xlsx"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-        // libxlsxwriter 需要 file path 字符串
         let path = url.path
 
-        // 创建 workbook / worksheet
         guard let workbook = workbook_new(path) else {
             errorText = "Export Excel failed: workbook_new returned nil"
             return
         }
-        let worksheet = workbook_add_worksheet(workbook, "Daily")
 
-        // 一些格式（可选）
         let headerFormat = workbook_add_format(workbook)
         format_set_bold(headerFormat)
 
-        // Header
-        let headers = [
+        // Daily sheet
+        let dailySheet = workbook_add_worksheet(workbook, "Daily")
+        let dailyHeaders = [
             "date",
             "steps",
             "sleepHours",
             "hrvSDNN_ms",
             "restingHR_bpm",
+            "heartRateAvg",
+            "heartRateMin",
+            "heartRateMax",
+            "bloodOxygenAvg",
+            "respiratoryRateAvg",
             "activeEnergyKcal",
+            "hasHeartRate",
+            "hasOxygen",
             "validDay",
             "syncedAt"
         ]
 
-        for (col, h) in headers.enumerated() {
-            worksheet_write_string(worksheet, 0, lxw_col_t(col), h, headerFormat)
+        for (col, h) in dailyHeaders.enumerated() {
+            worksheet_write_string(dailySheet, 0, lxw_col_t(col), h, headerFormat)
         }
 
-        // 内容
-        for (i, r) in rows.enumerated() {
+        for (i, r) in daily.enumerated() {
             let row = lxw_row_t(i + 1)
 
-            // date（字符串）
-            worksheet_write_string(worksheet, row, 0, r.dateId, nil)
+            worksheet_write_string(dailySheet, row, 0, r.dateId, nil)
 
-            // steps（数字）
-            if let v = r.steps {
-                worksheet_write_number(worksheet, row, 1, Double(v), nil)
+            if let v = r.steps { worksheet_write_number(dailySheet, row, 1, Double(v), nil) }
+            if let v = r.sleepHours { worksheet_write_number(dailySheet, row, 2, v, nil) }
+            if let v = r.hrvSDNNms { worksheet_write_number(dailySheet, row, 3, v, nil) }
+            if let v = r.restingHRbpm { worksheet_write_number(dailySheet, row, 4, v, nil) }
+            if let v = r.heartRateAvg { worksheet_write_number(dailySheet, row, 5, v, nil) }
+            if let v = r.heartRateMin { worksheet_write_number(dailySheet, row, 6, v, nil) }
+            if let v = r.heartRateMax { worksheet_write_number(dailySheet, row, 7, v, nil) }
+            if let v = r.bloodOxygenAvg { worksheet_write_number(dailySheet, row, 8, v, nil) }
+
+            if let v = respiratoryFor(dateId: r.dateId) {
+                worksheet_write_number(dailySheet, row, 9, v, nil)
             }
 
-            // sleepHours
-            if let v = r.sleepHours {
-                worksheet_write_number(worksheet, row, 2, v, nil)
-            }
-
-            // hrvSDNN_ms
-            if let v = r.hrvSDNNms {
-                worksheet_write_number(worksheet, row, 3, v, nil)
-            }
-
-            // restingHR_bpm
-            if let v = r.restingHRbpm {
-                worksheet_write_number(worksheet, row, 4, v, nil)
-            }
-
-            // activeEnergyKcal
-            if let v = r.activeEnergyKcal {
-                worksheet_write_number(worksheet, row, 5, v, nil)
-            }
-
-            // validDay（写成 true/false 字符串更直观）
-            if let v = r.validDay {
-                worksheet_write_string(worksheet, row, 6, v ? "true" : "false", nil)
-            }
-
-            // syncedAt（ISO8601 字符串）
-            if let d = r.syncedAt {
-                worksheet_write_string(worksheet, row, 7, iso8601(d), nil)
-            }
+            if let v = r.activeEnergyKcal { worksheet_write_number(dailySheet, row, 10, v, nil) }
+            if let v = r.hasHeartRate { worksheet_write_string(dailySheet, row, 11, v ? "true" : "false", nil) }
+            if let v = r.hasOxygen { worksheet_write_string(dailySheet, row, 12, v ? "true" : "false", nil) }
+            if let v = r.validDay { worksheet_write_string(dailySheet, row, 13, v ? "true" : "false", nil) }
+            if let d = r.syncedAt { worksheet_write_string(dailySheet, row, 14, iso8601(d), nil) }
         }
 
-        // 可选：列宽好看一点
-        worksheet_set_column(worksheet, 0, 0, 12, nil) // date
-        worksheet_set_column(worksheet, 1, 1, 10, nil) // steps
-        worksheet_set_column(worksheet, 2, 2, 12, nil) // sleep
-        worksheet_set_column(worksheet, 3, 3, 12, nil) // hrv
-        worksheet_set_column(worksheet, 4, 4, 14, nil) // rhr
-        worksheet_set_column(worksheet, 5, 5, 16, nil) // energy
-        worksheet_set_column(worksheet, 6, 6, 10, nil) // validDay
-        worksheet_set_column(worksheet, 7, 7, 26, nil) // syncedAt
+        // Sleep sheet
+        let sleepSheet = workbook_add_worksheet(workbook, "SleepNightly")
+        let sleepHeaders = [
+            "anchorDateLocal",
+            "sleepKey",
+            "respiratoryRateAvg",
+            "asleepMin",
+            "awakeMin",
+            "coreMin",
+            "deepMin",
+            "remMin",
+            "hasStages",
+            "startTimeUTC",
+            "endTimeUTC",
+            "createdAt"
+        ]
 
-        // 关闭并写入文件
+        for (col, h) in sleepHeaders.enumerated() {
+            worksheet_write_string(sleepSheet, 0, lxw_col_t(col), h, headerFormat)
+        }
+
+        for (i, r) in nightly.enumerated() {
+            let row = lxw_row_t(i + 1)
+
+            worksheet_write_string(sleepSheet, row, 0, r.anchorDateLocal, nil)
+            worksheet_write_string(sleepSheet, row, 1, r.sleepKey, nil)
+
+            if let v = r.respiratoryRateAvg { worksheet_write_number(sleepSheet, row, 2, v, nil) }
+            if let v = r.asleepMin { worksheet_write_number(sleepSheet, row, 3, Double(v), nil) }
+            if let v = r.awakeMin { worksheet_write_number(sleepSheet, row, 4, Double(v), nil) }
+            if let v = r.coreMin { worksheet_write_number(sleepSheet, row, 5, Double(v), nil) }
+            if let v = r.deepMin { worksheet_write_number(sleepSheet, row, 6, Double(v), nil) }
+            if let v = r.remMin { worksheet_write_number(sleepSheet, row, 7, Double(v), nil) }
+            if let v = r.hasStages { worksheet_write_string(sleepSheet, row, 8, v ? "true" : "false", nil) }
+            if let v = r.startTimeUTC { worksheet_write_number(sleepSheet, row, 9, v, nil) }
+            if let v = r.endTimeUTC { worksheet_write_number(sleepSheet, row, 10, v, nil) }
+            if let d = r.createdAt { worksheet_write_string(sleepSheet, row, 11, iso8601(d), nil) }
+        }
+
+        worksheet_set_column(dailySheet, 0, 14, 16, nil)
+        worksheet_set_column(sleepSheet, 0, 11, 16, nil)
+
         let result = workbook_close(workbook)
         if result != LXW_NO_ERROR {
             errorText = "Export Excel failed: workbook_close error code \(result)"
