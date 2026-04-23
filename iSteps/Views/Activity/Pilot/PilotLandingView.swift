@@ -38,7 +38,7 @@ struct PilotLandingView: View {
     @State private var showProfileOnboarding = false
     @State private var saveError: String? = nil
 
-    private let surveyURLString: String = "https://form.typeform.com/to/STFEkNs0"
+    private let surveyURLString: String = "https://inquira-vert.vercel.app/g/brave-nursing/survey/csusb-nursing-student-experience-survey"
 
     var body: some View {
         NavigationView {
